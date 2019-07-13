@@ -8,6 +8,7 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <termios.h>
+#include <time.h>
 #include <sys/time.h>
 #include <signal.h>
 #include <string.h>
@@ -25,12 +26,30 @@
 #define GAME_STAT_READY         1
 #define GAME_STAT_PLAYING       2
 #define GAME_STAT_PAUSE         3
-/* 0 <= GAME_SPEED_ACC_FACT <= 10.0*/
+/* 0 <= GAME_SPEED_ACC_FACT <= 10.0 */
 #define GAME_SPEED_ACC_FACT     10.0
+
+struct body_slice_type
+{
+    int x;
+    int y;
+    int direct;
+    struct body_slice_type *prev_slice_ptr;
+    struct body_slice_type *next_slice_ptr;
+};
+
+struct snake_type
+{
+    int length;
+    int speed_factor;
+    struct body_slice_type *head;
+    struct body_slice_type *tail;
+};
 
 static struct termios ori_attr, cur_attr;
 static char stage_map[HEIGHT][WIDTH] = {0};
 static struct snake_type snake = {0};
+static int nonblock = 0;
 unsigned int eggs = 0;
 int total_score = 0;
 int game_stat = 0;
@@ -50,7 +69,6 @@ int reset_stdin()
     return tcsetattr(STDIN_FILENO, TCSANOW, &ori_attr);
 }
 
-static int nonblock = 0;
 int set_stdin_nonblock()
 {   
     if(nonblock || tcgetattr(STDIN_FILENO, &ori_attr))
@@ -95,23 +113,6 @@ void reset_kb()
     if (!reset_stdin())
         nonblock = 0;
 }
-
-struct body_slice_type
-{
-    int x;
-    int y;
-    int direct;
-    struct body_slice_type *prev_slice_ptr;
-    struct body_slice_type *next_slice_ptr;
-};
-
-struct snake_type
-{
-    int length;
-    int speed_factor;
-    struct body_slice_type *head;
-    struct body_slice_type *tail;
-};
 
 void draw_body_slice(int x, int y)
 {

@@ -1,9 +1,10 @@
 闲来无事,编个贪吃蛇玩玩
 
 ## 编译
-    $ gcc -c snake.c -o snake
+    $ gcc snake.c -o snake
 
 ## 运行
+    $ chmod +x snake
     $ ./snake
 
 ## 更新日志

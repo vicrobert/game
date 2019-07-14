@@ -26,7 +26,7 @@
 #define GAME_STAT_READY         1
 #define GAME_STAT_PLAYING       2
 #define GAME_STAT_PAUSE         3
-/* 0 <= GAME_SPEED_ACC_FACT <= 10.0 */
+/* 0 < GAME_SPEED_ACC_FACT <= 10.0 */
 #define GAME_SPEED_ACC_FACT     10.0
 
 struct body_slice_type
@@ -46,6 +46,12 @@ struct snake_type
     struct body_slice_type *tail;
 };
 
+#define print_s(s, x, y) \
+    printf("\033[%d;%dH%s\n", (y), ((x) << 1), (s))
+
+#define print_i(i, x, y) \
+    printf("\033[%d;%dH%d\n", (y), (x), (i))
+
 static struct termios ori_attr, cur_attr;
 static char stage_map[HEIGHT][WIDTH] = {0};
 static struct snake_type snake = {0};
@@ -53,16 +59,6 @@ static int nonblock = 0;
 unsigned int eggs = 0;
 int total_score = 0;
 int game_stat = 0;
-
-void print_s(const char * s, int x, int y)
-{
-    printf("\033[%d;%dH%s\n", y, x << 1, s);
-}
-
-void print_i(int i, int x, int y)
-{
-    printf("\033[%d;%dH%d\n", y, x, i);
-}
 
 int reset_stdin()
 {

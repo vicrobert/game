@@ -13,6 +13,7 @@
 #include <signal.h>
 #include <string.h>
 #include <stdlib.h>
+#include <assert.h>
 
 #define WIDTH     30
 #define HEIGHT    30
@@ -54,6 +55,7 @@ struct snake_type
 
 static struct termios ori_attr, cur_attr;
 static char stage_map[HEIGHT][WIDTH] = {0};
+static struct body_slice_type body_slice_pool[(HEIGHT-2)*(WIDTH-2)];
 static struct snake_type snake = {0};
 static int nonblock = 0;
 unsigned int eggs = 0;
@@ -241,12 +243,19 @@ void update_speed_factor()
     snake.speed_factor = (int)(10 * len / range);
 }
 
+struct body_slice_type * new_body()
+{
+    static int allc_idx = 0;
+    static int allc_maximum = (HEIGHT - 2) * (WIDTH - 2);
+    assert (allc_idx < allc_maximum);
+    return &body_slice_pool[allc_idx ++];
+}
+
 int snake_born(int x, int y, int direct)
 {
     struct body_slice_type *new_head, *new_tail;
     if (!snake.head && !snake.tail) {
-        new_head = (struct body_slice_type *)
-            malloc(sizeof(struct body_slice_type));
+        new_head = new_body();
         if (new_head) {
             new_head->x = x;
             new_head->y = y;
@@ -255,8 +264,7 @@ int snake_born(int x, int y, int direct)
         }
 
         /* tail */
-        new_tail = (struct body_slice_type *)
-            malloc(sizeof(struct body_slice_type));
+        new_tail = new_body();
         if (new_tail) {
             new_tail->direct = direct;
             if(direct == DIRECT_UP) {
@@ -299,8 +307,7 @@ int prepares_to_grow()
     if (!snake.head || !snake.tail)
         return -1;
 
-    struct body_slice_type *new_tail = 
-        (struct body_slice_type *)malloc(sizeof(struct body_slice_type));
+    struct body_slice_type *new_tail = new_body();
     
     if (new_tail) {
         /* keep the same direct */

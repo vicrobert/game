@@ -54,9 +54,10 @@ struct snake_type
     printf("\033[%d;%dH%d\n", (y), (x), (i))
 
 static struct termios ori_attr, cur_attr;
-static char stage_map[HEIGHT][WIDTH] = {0};
 static struct body_slice_type body_slice_pool[(HEIGHT-2)*(WIDTH-2)];
 static struct snake_type snake = {0};
+static char stage_map[HEIGHT][WIDTH] = {0};
+static int allc_idx = 0;
 static int nonblock = 0;
 unsigned int eggs = 0;
 int total_score = 0;
@@ -245,7 +246,6 @@ void update_speed_factor()
 
 struct body_slice_type * new_body()
 {
-    static int allc_idx = 0;
     static int allc_maximum = (HEIGHT - 2) * (WIDTH - 2);
     assert (allc_idx < allc_maximum);
     return &body_slice_pool[allc_idx ++];
@@ -265,27 +265,21 @@ int snake_born(int x, int y, int direct)
 
         /* tail */
         new_tail = new_body();
-        if (new_tail) {
-            new_tail->direct = direct;
-            if(direct == DIRECT_UP) {
-                new_tail->x = x;
-                new_tail->y = y + 1;
-            } else if (direct == DIRECT_DOWN) {
-                new_tail->x = x;
-                new_tail->y = y - 1;
-            } else if (direct == DIRECT_RIGHT) {
-                new_tail->x = x - 1;
-                new_tail->y = y;                
-            } else {
-                new_tail->x = x + 1;
-                new_tail->y = y;
-            }
-            snake.tail = new_tail;
+        new_tail->direct = direct;
+        if(direct == DIRECT_UP) {
+            new_tail->x = x;
+            new_tail->y = y + 1;
+        } else if (direct == DIRECT_DOWN) {
+            new_tail->x = x;
+            new_tail->y = y - 1;
+        } else if (direct == DIRECT_RIGHT) {
+            new_tail->x = x - 1;
+            new_tail->y = y;                
         } else {
-            free(new_head);
-            return -1;
+            new_tail->x = x + 1;
+            new_tail->y = y;
         }
-
+        snake.tail = new_tail;
         new_head->prev_slice_ptr = NULL;
         new_head->next_slice_ptr = new_tail;
         new_tail->prev_slice_ptr = new_head;
@@ -422,21 +416,18 @@ void snake_remove(int screen_clear)
 {
     struct body_slice_type *pslice = snake.head;
     struct body_slice_type *pslice_next;
-    while(pslice) {
-        pslice_next = pslice->next_slice_ptr;
-
-        /* clear */
-        if (screen_clear)
+    /* clear screen */
+    if (screen_clear) {
+        while(pslice) {
+            pslice_next = pslice->next_slice_ptr;
             clear_body_slice(pslice->x, pslice->y);
-
-        /* free */
-        free(pslice);
-
-        pslice = pslice_next;
+            pslice = pslice_next;
+        }
     }
     snake.head = NULL;
     snake.tail = NULL;
-    //snake.length = 0;
+    snake.length = 0;
+    allc_idx = 0;
 }
 
 void clear_stage()

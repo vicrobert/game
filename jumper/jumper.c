@@ -14,6 +14,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <assert.h>
+#include "list.h"
 
 #define WIDTH     30
 #define HEIGHT    30
@@ -32,30 +33,31 @@
 #define PEDAL_POOL_MAX  10
 #define PEDAL_LENGTH_MAX 10
 
-struct pedal
+struct _pedal_t
 {
     /* function table */
-    void (* reset)(struct pedal * this);
-    void (* shift_upstair)(struct pedal * this);
+    void (* reset)(struct _pedal_t * this);
+    void (* shift_upstair)(struct _pedal_t * this);
     /* data fields */
     int x;
     int y;
     int length;
     char type;
-    struct pedal *prev_ptr;
-    struct pedal *next_ptr;
+    /* sibing list */
+    DECLARE_LISTHEAD(sibling);
 };
+typedef struct _pedal_t pedal_t;
 
 
 #define print_s(s, x, y) \
-    printf("\033[%d;%dH%s\n", (y), ((x) << 1), (s))
+    printf("\033[%d;%dH%s\n", (y), (x), (s))
 
 #define print_i(i, x, y) \
     printf("\033[%d;%dH%d\n", (y), (x), (i))
 
 static struct termios ori_attr, cur_attr;
-static struct pedal pedal_pool[PEDAL_POOL_MAX];
-static struct pedal * pedal_head = NULL, * pedal_tail = NULL;
+static pedal_t * pedal_pool_first, * pedal_pool_last;
+static pedal_t * pedal_head = NULL, * pedal_tail = NULL;
 static int allc_idx = 0;
 static int recl_idx = -1;
 static int nonblock = 0;
@@ -113,49 +115,45 @@ void reset_kb()
         nonblock = 0;
 }
 
-struct pedal * __alloc_pedal()
+void __init_pedal_pool()
 {
-    struct pedal * new;
-
-    if (allc_idx == recl_idx)
-        return NULL;
-
-    new = &pedal_pool[allc_idx];
-
-    if (recl_idx == -1)
-        recl_idx = allc_idx;
-
-    allc_idx = (allc_idx + 1) % PEDAL_POOL_MAX;
-
-    return new;
-}
-
-int __reclaim_pedal(struct pedal ** pedal)
-{
-    if (pedal != NULL && * pedal != NULL) {
-        if (recl_idx == -1)
-            return;
-
-        (* pedal)->reset(* pedal);
-
-        recl_idx = (recl_idx + 1) % PEDAL_POOL_MAX;
-
-        if (recl_idx == allc_idx)
-            recl_idx = -1;
-
-        * pedal = NULL;
-
-        return 0;
+    int i;
+    pedal_t * alloc_one;
+    
+    pedal_pool_first = malloc(sizeof(pedal_t));
+    pedal_pool_last = pedal_pool_first;
+    list_init_listhead(pedal_pool_first, sibling);
+    
+    for (i = 1; i < PEDAL_LENGTH_MAX; i ++) {
+        alloc_one = malloc(sizeof(pedal_t));
+        list_append(alloc_one, pedal_pool_last, sibling);
+        pedal_pool_last = alloc_one;
     }
-    return -1;
 }
 
-void __pedal_reset(struct pedal * this)
+pedal_t * __alloc_pedal()
 {
-    memset((void *)this, NULL, sizeof(this));
+    pedal_t * pick = pedal_pool_first;
+    if (pick) {
+        pedal_pool_first = list_next_obj(pick, pedal_t, sibling);
+        list_remove(pick, sibling);
+    }
+    return pick;
 }
 
-void __pedal_shift_upstair(struct pedal * this)
+int __reclaim_pedal(pedal_t * pedal)
+{
+    pedal->reset(pedal);
+    list_append(pedal, pedal_pool_last, sibling);
+    pedal_pool_last = pedal;
+}
+
+void __pedal_reset(pedal_t * this)
+{
+    memset((void *)this, NULL, sizeof(pedal_t));
+}
+
+void __pedal_shift_upstair(pedal_t * this)
 {
     int i;
     char wdc[4], c[20];
@@ -173,24 +171,23 @@ void __pedal_shift_upstair(struct pedal * this)
 
 void shift_upstair()
 {
-    struct pedal * cur = pedal_head;
+    pedal_t * cur;
     if (pedal_head != NULL) {
-        while (cur != NULL) {
+        list_for_each(cur, pedal_head, pedal_t, sibling)
             cur->shift_upstair(cur);
-            cur = cur->next_ptr;
-        }
+    
         if (pedal_head->y < 1) {
-            cur = pedal_head->next_ptr;
-            __reclaim_pedal(&pedal_head);
-            pedal_head = cur;
+            cur = pedal_head;
+            pedal_head = list_next_obj(pedal_head, pedal_t, sibling);
+            __reclaim_pedal(cur);
         }
-    }
+    }    
 }
 
 void pedal_appear()
 {
     int pedal_x, pedal_len;
-    struct pedal * new_one = __alloc_pedal();
+    pedal_t * new_one = __alloc_pedal();
     if (new_one != NULL) {
         new_one->reset = __pedal_reset;
         new_one->shift_upstair = __pedal_shift_upstair;
@@ -201,15 +198,12 @@ void pedal_appear()
         new_one->x = pedal_x + ORG_X;
         new_one->y = HEIGHT - 2;
         new_one->length = 10;
-        new_one->next_ptr = NULL;
 
         if (pedal_head == NULL) {
-            new_one->prev_ptr = NULL;
             pedal_head = new_one;
             pedal_tail = pedal_head;
         } else {
-            new_one->prev_ptr = pedal_tail;
-            pedal_tail->next_ptr = new_one;
+            list_append(new_one, pedal_tail, sibling);
             pedal_tail = new_one;
         }
     }
@@ -376,6 +370,7 @@ int register_timer()
 
 void game_ready()
 {
+    __init_pedal_pool();
     draw_stage();
     score(1); /* zero total_score */
     game_stat = GAME_STAT_READY;

@@ -28,11 +28,12 @@ typedef struct _listhead_t listhead_t;
 /* The following `ptr` according to the pointer of listhead_t */
 #define _list_insert_(headptr, ptr) \
 	do { \
-		(ptr)->prev = (headptr)->prev; \
 		(ptr)->next = (headptr); \
-		if ((headptr)->prev) \
-			(headptr)->prev->next = (ptr); \
-		(headptr)->prev = (ptr); \
+		if (headptr) { \
+			(ptr)->prev = (headptr)->prev; \
+			if ((headptr)->prev) (headptr)->prev->next = (ptr); \
+			(headptr)->prev = (ptr); \
+		} else (ptr)->prev = NULL; \
 	} while (0)
 
 #define _list_append_(tailptr, ptr) \

@@ -14,10 +14,11 @@
 #include <string.h>
 #include <stdlib.h>
 #include <assert.h>
+#include "jumper.h"
 #include "list.h"
 
-#define WIDTH     30
-#define HEIGHT    30
+#define WIDTH     50
+#define HEIGHT    35
 #define ORG_X     1
 #define ORG_Y     1
 #define DIRECT_UP       1
@@ -33,22 +34,6 @@
 #define PEDAL_POOL_MAX  10
 #define PEDAL_LENGTH_MAX 10
 
-struct _pedal_t
-{
-    /* function table */
-    void (* reset)(struct _pedal_t * this);
-    void (* shift_upstair)(struct _pedal_t * this);
-    /* data fields */
-    int x;
-    int y;
-    int length;
-    char type;
-    /* sibing list */
-    DECLARE_LISTHEAD(sibling);
-};
-typedef struct _pedal_t pedal_t;
-
-
 #define print_s(s, x, y) \
     printf("\033[%d;%dH%s\n", (y), (x), (s))
 
@@ -56,12 +41,11 @@ typedef struct _pedal_t pedal_t;
     printf("\033[%d;%dH%d\n", (y), (x), (i))
 
 static struct termios ori_attr, cur_attr;
-static pedal_t * pedal_pool_first, * pedal_pool_last;
+static pedal_t * pedal_pool, * pedal_alloc_ptr;
 static pedal_t * pedal_head = NULL, * pedal_tail = NULL;
-static int allc_idx = 0;
-static int recl_idx = -1;
+static actor_t * actor;
 static int nonblock = 0;
-static short speed_factor;
+static short speed_factor = 0;
 int total_score = 0;
 int game_stat = 0;
 
@@ -115,89 +99,300 @@ void reset_kb()
         nonblock = 0;
 }
 
+void __pedal_draw(pedal_t * this)
+{
+    int i;
+    for (i = 0; i < this->length; i ++)
+        print_s("_", this->x + i, this->y);
+}
+
+void __pedal_draw_slice(pedal_t * this, int x)
+{
+    print_s("_", x, this->y);
+}
+
+void __pedal_erase(pedal_t * this)
+{
+    int i;
+    for (i = 0; i < this->length; i ++)
+        print_s(" ", this->x + i, this->y);
+}
+
+void __pedal_erase_slice(struct _pedal_t * this, int x)
+{
+    print_s(" ", x, this->y);
+}
+
+void __pedal_reset(pedal_t * pedal)
+{
+    if (pedal) {
+        pedal->x = pedal->y = 0;
+        pedal->length = 0;
+        pedal->type = -1;
+    }
+}
+
+void __pedal_rise(pedal_t * this)
+{
+    this->erase(this);
+    this->y --;
+    if (this->y > ORG_Y) {
+        this->draw(this);
+        if (this->actor) {
+            this->actor->y = this->y;
+            this->actor->draw(this->actor);
+        }
+    }
+}
+
+void __actor_erase(actor_t * this)
+{
+    print_s(" ", this->x, this->y);
+}
+
+void __actor_draw(actor_t * this)
+{
+    print_s("Y", this->x, this->y);
+}
+
+/*
+ * returns: 0 no crash
+ *          1 hit the pedal
+ *          2 hit the boundary line
+ */
+int hit_test(actor_t * actor, pedal_t * ped)
+{
+    if (actor->y > ORG_Y + HEIGHT - 1)
+        return 2;
+
+    if (actor->x >= ped->x && actor->x < ped->x + ped->length
+        && actor->y == ped->y) {
+        ped->actor = actor;
+        actor->pedal = ped;
+        return 1;
+    } else {
+        ped->actor = NULL;
+        return 0;
+    }
+}
+
+void ___determine_hit(actor_t * actor)
+{
+    pedal_t * cur_pd;
+    list_for_each(cur_pd, pedal_head, pedal_t, sibling)
+        if (hit_test(actor, cur_pd) == 1)
+            return;
+    actor->pedal = NULL;
+}
+
+int __actor_move_left(actor_t * this)
+{
+    pedal_t * ped = this->pedal;
+    if (this->x > ORG_X + 1) {
+        if (ped) {
+            if (this->x >= ped->x
+                && this->x < ped->x + ped->length) {
+                ped->draw_slice(ped, this->x);
+            } else {
+                this->erase(this);
+            }
+        } else {
+            this->erase(this);
+        }
+
+        this->x --;
+        this->draw(this);
+
+        if (ped && (this->x < ped->x
+            || this->x > ped->x + ped->length - 1)) {
+            ped->actor = NULL;
+            this->pedal = NULL;
+        }
+
+        return 0;
+    }
+    return 1;
+}
+
+int __actor_move_right(actor_t * this)
+{
+    pedal_t * ped = this->pedal;
+    if (this->x < ORG_X + WIDTH - 2) {
+        if (ped) {
+            if (this->x >= ped->x
+                && this->x < ped->x + ped->length) {
+                ped->draw_slice(ped, this->x);
+            } else {
+                this->erase(this);
+            }
+        } else {
+            this->erase(this);
+        }
+        this->x ++;
+        this->draw(this);
+
+        if (ped && (this->x < ped->x
+            || this->x > ped->x + ped->length - 1)) {
+            ped->actor = NULL;
+            this->pedal = NULL;
+        }
+
+        return 0;
+    }
+    return 1;
+}
+
+int __actor_move_up(actor_t * this)
+{
+    pedal_t * ped = this->pedal;
+    if (this->y > ORG_Y + 1) {
+        if (ped) {
+            if (this->x >= ped->x
+                && this->x < ped->x + ped->length) {
+                ped->draw_slice(ped, this->x);
+            } else {
+                this->erase(this);
+            }
+        } else {
+           this->erase(this);
+        }
+        this->y --;
+        this->draw(this);
+
+        return 0;
+    }
+    return -1;
+}
+
+int __actor_move_down(actor_t * this)
+{
+    pedal_t * ped = this->pedal;
+
+    if (ped || this->initialized == 0)
+        return -1;
+
+    if (this->y < ORG_Y + HEIGHT - 2) {
+        this->erase(this);
+        this->y ++;
+        this->draw(this);
+
+        ___determine_hit(this);
+
+        return 0;
+    }
+    return -1;
+}
+
 void __init_pedal_pool()
 {
     int i;
     pedal_t * alloc_one;
-    
-    pedal_pool_first = malloc(sizeof(pedal_t));
-    pedal_pool_last = pedal_pool_first;
-    list_init_listhead(pedal_pool_first, sibling);
-    
+
+    pedal_pool = malloc(sizeof(pedal_t));
+    memset(pedal_pool, 0, sizeof(pedal_t));
+    pedal_alloc_ptr = pedal_pool;
+    list_init_listhead(pedal_pool, sibling);
+    pedal_alloc_ptr->erase = __pedal_erase;
+    pedal_alloc_ptr->erase_slice = __pedal_erase_slice;
+    pedal_alloc_ptr->draw = __pedal_draw;
+    pedal_alloc_ptr->draw_slice = __pedal_draw_slice;
+    pedal_alloc_ptr->reset = __pedal_reset;
+    pedal_alloc_ptr->rise = __pedal_rise;
+
     for (i = 1; i < PEDAL_LENGTH_MAX; i ++) {
         alloc_one = malloc(sizeof(pedal_t));
-        list_append(alloc_one, pedal_pool_last, sibling);
-        pedal_pool_last = alloc_one;
+        memset(alloc_one, 0, sizeof(pedal_t));
+        alloc_one->erase = __pedal_erase;
+        alloc_one->erase_slice = __pedal_erase_slice;
+        alloc_one->draw = __pedal_draw;
+        alloc_one->draw_slice = __pedal_draw_slice;
+        alloc_one->reset = __pedal_reset;
+        alloc_one->rise = __pedal_rise;
+        list_append(alloc_one, pedal_alloc_ptr, sibling);
+        pedal_alloc_ptr = alloc_one;
     }
 }
 
-pedal_t * __alloc_pedal()
+void __init_actor()
 {
-    pedal_t * pick = pedal_pool_first;
+    actor = malloc(sizeof(actor_t));
+    memset(actor, 0, sizeof(actor_t));
+    actor->erase = __actor_erase;
+    actor->draw = __actor_draw;
+    actor->move_left = __actor_move_left;
+    actor->move_right = __actor_move_right;
+    actor->move_up = __actor_move_up;
+    actor->move_down = __actor_move_down;
+}
+
+void __free_pedal_pool()
+{
+    pedal_t * cur, * to_free;
+    list_for_each(cur, pedal_pool, pedal_t, sibling) {
+        to_free = list_prev_obj(cur, pedal_t, sibling);
+        if (to_free)
+            free(to_free);
+    }
+    free(pedal_alloc_ptr);
+    pedal_head = pedal_alloc_ptr = NULL;
+}
+
+void __free_actor()
+{
+    if (actor) {
+        free(actor);
+        actor = NULL;
+    }
+}
+
+pedal_t * alloc_pedal()
+{
+    pedal_t * pick = pedal_alloc_ptr;
     if (pick) {
-        pedal_pool_first = list_next_obj(pick, pedal_t, sibling);
+        pedal_alloc_ptr = list_prev_obj(pick, pedal_t, sibling);
         list_remove(pick, sibling);
     }
     return pick;
 }
 
-int __reclaim_pedal(pedal_t * pedal)
+int reclaim_pedal(pedal_t * pedal)
 {
-    pedal->reset(pedal);
-    list_append(pedal, pedal_pool_last, sibling);
-    pedal_pool_last = pedal;
-}
-
-void __pedal_reset(pedal_t * this)
-{
-    memset((void *)this, NULL, sizeof(pedal_t));
-}
-
-void __pedal_shift_upstair(pedal_t * this)
-{
-    int i;
-    char wdc[4], c[20];
-    // sprintf(wdc, "%%%ds", this->length);
-    // sprintf(c, wdc, " ");
-    // print_s(c, this->x, this->y);
-    for (i = 0; i < this->length; i ++)
-        print_s(" ", this->x + i, this->y);
-    this->y --;
-    if (this->y > 0) {
-        for (i = 0; i < this->length; i ++)
-            print_s("_", this->x + i, this->y);
+    if (pedal) {
+        pedal->reset(pedal);
+        list_append(pedal, pedal_alloc_ptr, sibling);
+        pedal_alloc_ptr = pedal;
     }
 }
 
-void shift_upstair()
+void pedal_rise()
 {
     pedal_t * cur;
     if (pedal_head != NULL) {
-        list_for_each(cur, pedal_head, pedal_t, sibling)
-            cur->shift_upstair(cur);
-    
-        if (pedal_head->y < 1) {
+        list_for_each(cur, pedal_head, pedal_t, sibling) {
+            cur->rise(cur);
+            if (!actor->pedal)
+                hit_test(actor, cur);
+        }
+
+        if (pedal_head->y < ORG_Y + 1) {
             cur = pedal_head;
             pedal_head = list_next_obj(pedal_head, pedal_t, sibling);
-            __reclaim_pedal(cur);
+            reclaim_pedal(cur);
         }
-    }    
+    }
 }
 
 void pedal_appear()
 {
     int pedal_x, pedal_len;
-    pedal_t * new_one = __alloc_pedal();
+    pedal_t * new_one = alloc_pedal();
     if (new_one != NULL) {
-        new_one->reset = __pedal_reset;
-        new_one->shift_upstair = __pedal_shift_upstair;
-
         srand(time(0));
-        pedal_x = (WIDTH - 2) * (rand() / (RAND_MAX + 1.0));
-        pedal_len = PEDAL_LENGTH_MAX * (rand() / (RAND_MAX + 1.0));
+        pedal_len = (PEDAL_LENGTH_MAX - 3) * (rand() / (RAND_MAX + 1.0)) + 3;
+        pedal_x = (WIDTH - pedal_len - 3 ) * (rand() / (RAND_MAX + 1.0)) + 1;
         new_one->x = pedal_x + ORG_X;
-        new_one->y = HEIGHT - 2;
-        new_one->length = 10;
+        new_one->y = ORG_X + HEIGHT - 2;
+        new_one->length = pedal_len;
 
         if (pedal_head == NULL) {
             pedal_head = new_one;
@@ -205,6 +400,14 @@ void pedal_appear()
         } else {
             list_append(new_one, pedal_tail, sibling);
             pedal_tail = new_one;
+        }
+
+        if (actor->initialized == 0) {
+            actor->x = new_one->x;
+            actor->y = new_one->y;
+            actor->pedal = new_one;
+            new_one->actor = actor;
+            actor->initialized = 1;
         }
     }
 }
@@ -283,7 +486,7 @@ void draw_stage()
     print_s("SCORE:", ORG_X, ORG_Y + HEIGHT);
 }
 
-int timeline_forward()
+int exec_input_cmd()
 {
     int key_code;
 
@@ -301,7 +504,7 @@ int timeline_forward()
         case 'w':
         case 'W':
         case 0xe048:
-            // change_crawling_direct(DIRECT_UP);
+            // change_crawling_direct(DIRECT_UP;
             break;
         case 's':
         case 'S':
@@ -311,16 +514,15 @@ int timeline_forward()
         case 'a':
         case 'A':
         case 0xe04b:
-            // change_crawling_direct(DIRECT_LEFT);
+            actor->move_left(actor);
             break;
         case 'd':
         case 'D':
         case 0xe04d:
-            // change_crawling_direct(DIRECT_RIGHT);
+            actor->move_right(actor);
             break;
     }
 
-    shift_upstair();
     return 0;
 }
 
@@ -334,26 +536,46 @@ int unregister_timer()
     return setitimer(ITIMER_REAL, &itv, NULL);
 }
 
-void time_tick(int signo)
+void actor_fall_trigger()
 {
-    static int ticks = 10;
-    if (ticks > speed_factor) {
-        ticks --;
+    //TODO:调速
+    actor->move_down(actor);
+}
+
+void pedal_rise_trigger()
+{
+    //TODO:调速
+    pedal_rise();
+}
+
+void pedal_appear_trigger()
+{
+    static int ticks_10x12 = 12;
+    if (ticks_10x12 > 0) {
+        ticks_10x12 --;
         return;
     }
-    ticks = 10;
-    if(timeline_forward()) {
+    ticks_10x12 = 12;
+    pedal_appear();
+}
+
+void time_forward(int signo)
+{
+    static int ticks_10 = 10;
+    if (ticks_10 > speed_factor) {
+        ticks_10 --;
+        return;
+    }
+    ticks_10 = 10;
+
+    if(exec_input_cmd()) {
         game_stat = GAME_STAT_STOP;
         unregister_timer();
     }
 
-    static int ticks_2 = 12;
-    if (ticks_2 > speed_factor) {
-        ticks_2 --;
-        return;
-    }
-    ticks_2 = 12;
-    pedal_appear();
+    actor_fall_trigger();
+    pedal_rise_trigger();
+    pedal_appear_trigger();
 }
 
 int register_timer()
@@ -363,14 +585,25 @@ int register_timer()
     itv.it_interval.tv_usec = 10000;
     itv.it_value = itv.it_interval;
 
-    signal(SIGALRM, time_tick);
+    signal(SIGALRM, time_forward);
 
     return setitimer(ITIMER_REAL, &itv, NULL);
 }
 
-void game_ready()
+void initialize()
 {
     __init_pedal_pool();
+    __init_actor();
+}
+
+void uninitialize()
+{
+    __free_pedal_pool();
+    __free_actor();
+}
+
+void game_ready()
+{
     draw_stage();
     score(1); /* zero total_score */
     game_stat = GAME_STAT_READY;
@@ -400,6 +633,7 @@ void game_reset()
 int game_exit(int exit_code)
 {
     game_reset();
+    uninitialize();
     print_s("GAME OVER!", ORG_X, ORG_Y + HEIGHT + 1);
 
     return 0;
@@ -407,6 +641,7 @@ int game_exit(int exit_code)
 
 int main()
 {
+    initialize();
     game_ready();
     game_play();
 

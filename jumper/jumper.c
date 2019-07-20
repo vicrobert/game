@@ -480,9 +480,14 @@ void show_lives(int lives)
 
 void update_speed_factor()
 {
-    // double range = (WIDTH - 2) * (HEIGHT - 2) / GAME_SPEED_ACC_FACT;
-    // int len = (int)(snake.length > range? range: snake.length);
-    // speed_factor = (int)(10 * len / range);
+    if (total_score > 500)
+        speed_factor = 4;
+    else if (total_score > 400)
+        speed_factor = 3;
+    else if (total_score > 300)
+        speed_factor = 2;
+    else if (total_score > 200)
+        speed_factor = 1;
 }
 
 void draw_stage()
@@ -592,6 +597,17 @@ void pedal_appear_trigger()
     pedal_appear();
 }
 
+void game_tuning_trigger()
+{
+    static int ticks_100 = 100;
+    if (ticks_100 > 0) {
+        ticks_100 --;
+        return;
+    }
+    ticks_100 = 100;
+    update_speed_factor();
+}
+
 void time_forward(int signo)
 {
     if(exec_input_cmd()) {
@@ -602,6 +618,7 @@ void time_forward(int signo)
     pedal_appear_trigger();
     pedal_rise_trigger();
     actor_fall_trigger();
+    game_tuning_trigger();
 }
 
 int register_timer()

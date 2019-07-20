@@ -61,11 +61,11 @@ struct _pedal_t
     /* function table */
     void (* reset)(struct _pedal_t * this);
     void (* rise)(struct _pedal_t * this);
-	void (* erase)(struct _pedal_t * this);
-	void (* erase_slice)(struct _pedal_t * this, int x);
-	void (* draw)(struct _pedal_t * this);
-	void (* draw_slice)(struct _pedal_t * this, int x);
-	int (* hit_test)(struct _pedal_t * this);
+    void (* erase)(struct _pedal_t * this);
+    void (* erase_slice)(struct _pedal_t * this, int x);
+    void (* draw)(struct _pedal_t * this);
+    void (* draw_slice)(struct _pedal_t * this, int x);
+    int (* hit_test)(struct _pedal_t * this);
     /* data fields */
     int x;
     int y;
@@ -82,19 +82,19 @@ struct _actor_t
     /* function table */
     int (* move_left)(struct _actor_t * this);
     int (* move_right)(struct _actor_t * this);
-	int (* move_up)(struct _actor_t * this);
-	int (* move_down)(struct _actor_t * this);
-	void (* erase)(struct _actor_t * this);
-	void (* draw)(struct _actor_t * this);
-	int (* hit_test)(struct _actor_t * this);
-	int (* continue_life)(struct _actor_t * this);
+    int (* move_up)(struct _actor_t * this);
+    int (* move_down)(struct _actor_t * this);
+    void (* erase)(struct _actor_t * this);
+    void (* draw)(struct _actor_t * this);
+    int (* hit_test)(struct _actor_t * this);
+    int (* continue_life)(struct _actor_t * this);
     /* data fields */
     int x;
     int y;
     int lives;
-	int initialized;
+    int initialized;
     /* pedal standing on */
-	pedal_t * pedal;
+    pedal_t * pedal;
 };
 typedef struct _actor_t actor_t;
 

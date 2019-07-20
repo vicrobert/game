@@ -25,6 +25,7 @@ static int nonblock = 0;
 static short speed_factor = 0;
 int total_score = 0;
 int game_stat = 0;
+const char * ped_type_str = "_+";
 
 int reset_stdin()
 {
@@ -81,6 +82,7 @@ void reset_kb()
  *          1 hit the pedal
  *          2 hit the top boundary
  *          3 hit the bottom boundary
+ *          4 hit the trap
  */
 int ___hit_test(actor_t * actor, pedal_t * ped)
 {
@@ -92,9 +94,12 @@ int ___hit_test(actor_t * actor, pedal_t * ped)
 
     if (actor->x >= ped->x && actor->x < ped->x + ped->length
         && actor->y == ped->y) {
-        ped->actor = actor;
-        actor->pedal = ped;
-        return 1;
+            ped->actor = actor;
+            actor->pedal = ped;
+        if (ped->type == PEDAL_TYPE_NOR)
+            return 1;
+        else
+            return 4;
     } else {
         ped->actor = NULL;
         return 0;
@@ -105,12 +110,12 @@ void __pedal_draw(pedal_t * this)
 {
     int i;
     for (i = 0; i < this->length; i ++)
-        print_s("_", this->x + i, this->y);
+        print_c(ped_type_str[this->type], this->x + i, this->y);
 }
 
 void __pedal_draw_slice(pedal_t * this, int x)
 {
-    print_s("_", x, this->y);
+    print_c(ped_type_str[this->type], x, this->y);
 }
 
 void __pedal_erase(pedal_t * this)
@@ -136,15 +141,23 @@ void __pedal_reset(pedal_t * pedal)
 
 void __pedal_rise(pedal_t * this)
 {
+    int hit_code;
+    
     this->erase(this);
     this->y --;
+    
     if (this->y >= 1) {
         this->draw(this);
         if (this->actor) {
             this->actor->y = this->y;
             this->actor->draw(this->actor);
         } else {
-            this->hit_test(this);
+            hit_code = this->hit_test(this);
+            if (hit_code == 4) {
+                /* if hit code equals 4, the actor had been bound */
+                assert(this->actor);
+                this->actor->continue_life(this->actor);
+            }
         }
     } else if (this->actor) {
         this->actor->continue_life(this->actor);
@@ -182,7 +195,7 @@ int __actor_hit_test(actor_t * this)
 int __actor_move_left(actor_t * this)
 {
     pedal_t * ped = this->pedal;
-    if (this->x > 1) {
+    if (this->x > 1 && this->y > 0 && this->y < HEIGHT - 1) {
         if (ped) {
             if (this->x >= ped->x
                 && this->x < ped->x + ped->length) {
@@ -211,7 +224,7 @@ int __actor_move_left(actor_t * this)
 int __actor_move_right(actor_t * this)
 {
     pedal_t * ped = this->pedal;
-    if (this->x < WIDTH - 2) {
+    if (this->x < WIDTH - 2 && this->y > 0 && this->y < HEIGHT - 1) {
         if (ped) {
             if (this->x >= ped->x
                 && this->x < ped->x + ped->length) {
@@ -271,7 +284,7 @@ int __actor_move_down(actor_t * this)
         this->y ++;
         
         hit_code = this->hit_test(this);
-        if (hit_code == 2 || hit_code == 3) {
+        if (hit_code == 2 || hit_code == 3 || hit_code == 4) {
             this->continue_life(this);
         } else {
             this->draw(this);
@@ -288,11 +301,10 @@ int __actor_continue_life(actor_t * this)
         if (this->pedal)
             this->pedal->actor = NULL;
         
-        this->pedal = list_prev_obj(pedal_tail, pedal_t, sibling);
-        if (!this->pedal)
-            this->pedal = pedal_head;
+        this->pedal = pedal_tail;           
+        if (this->pedal->type != PEDAL_TYPE_NOR)
+            this->pedal->type = PEDAL_TYPE_NOR;
         
-        assert(this->pedal);
         this->x = this->pedal->x;
         this->y = this->pedal->y;
         this->pedal->actor = this;
@@ -416,6 +428,8 @@ void pedal_appear()
             * (rand() / (double)RAND_MAX) + PEDAL_LENGTH_MIN;
         pedal_x = (WIDTH - pedal_len - 3) 
             * (rand() / (double)RAND_MAX) + 1;
+        new_one->type = rand() / (double)RAND_MAX > 0.15
+            ? PEDAL_TYPE_NOR : PEDAL_TYPE_TRAP;
         new_one->x = pedal_x;
         new_one->y = HEIGHT - 2;
         new_one->length = pedal_len;
@@ -427,16 +441,17 @@ void pedal_appear()
             list_append(new_one, pedal_tail, sibling);
             pedal_tail = new_one;
         }
-        new_one->draw(new_one);
 
         if (actor->initialized == 0) {
             actor->x = new_one->x;
             actor->y = new_one->y;
             actor->pedal = new_one;
             new_one->actor = actor;
+            new_one->type = PEDAL_TYPE_NOR;
             actor->initialized = 1;
             actor->draw(actor);
         }
+        new_one->draw(new_one);
     }
 }
 

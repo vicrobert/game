@@ -43,8 +43,18 @@
 #define print_s(s, x, y) \
     printf("\033[%d;%dH%s\n", (y) + ORG_Y, (x) + ORG_X, (s))
 
+#define print_c(c, x, y) \
+    printf("\033[%d;%dH%c\n", (y) + ORG_Y, (x) + ORG_X, (c))
+    
 #define print_i(i, x, y) \
     printf("\033[%d;%dH%d\n", (y) + ORG_Y, (x) + ORG_X, (i))
+
+enum _pedal_type_t
+{
+    PEDAL_TYPE_NOR,
+    PEDAL_TYPE_TRAP
+};
+typedef enum _pedal_type_t pedal_type_t;
 
 struct _pedal_t
 {
@@ -60,7 +70,7 @@ struct _pedal_t
     int x;
     int y;
     int length;
-    char type;
+    pedal_type_t type;
     struct _actor_t * actor;
     /* sibing list */
     DECLARE_LISTHEAD(sibling);

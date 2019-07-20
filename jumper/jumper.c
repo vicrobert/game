@@ -17,29 +17,6 @@
 #include "jumper.h"
 #include "list.h"
 
-#define WIDTH     50
-#define HEIGHT    35
-#define ORG_X     1
-#define ORG_Y     1
-#define DIRECT_UP       1
-#define DIRECT_DOWN     2
-#define DIRECT_RIGHT    3
-#define DIRECT_LEFT     4
-#define GAME_STAT_STOP          0
-#define GAME_STAT_READY         1
-#define GAME_STAT_PLAYING       2
-#define GAME_STAT_PAUSE         3
-/* 0 < GAME_SPEED_ACC_FACT <= 10.0 */
-#define GAME_SPEED_ACC_FACT     10.0
-#define PEDAL_POOL_MAX  10
-#define PEDAL_LENGTH_MAX 10
-
-#define print_s(s, x, y) \
-    printf("\033[%d;%dH%s\n", (y), (x), (s))
-
-#define print_i(i, x, y) \
-    printf("\033[%d;%dH%d\n", (y), (x), (i))
-
 static struct termios ori_attr, cur_attr;
 static pedal_t * pedal_pool, * pedal_alloc_ptr;
 static pedal_t * pedal_head = NULL, * pedal_tail = NULL;
@@ -70,12 +47,12 @@ int set_stdin_nonblock()
 
 int kbhit()
 {
-    char key[3];
     unsigned int nread;
+    char key[128] = {0};
 
     set_stdin_nonblock();
 
-    nread = read(STDIN_FILENO, &key, 3);
+    nread = read(STDIN_FILENO, key, 128);
     switch(nread) {
     case 1:
         return key[0];
@@ -97,6 +74,31 @@ void reset_kb()
 {
     if (!reset_stdin())
         nonblock = 0;
+}
+
+/*
+ * returns: 0 no crash
+ *          1 hit the pedal
+ *          2 hit the top boundary
+ *          3 hit the bottom boundary
+ */
+int ___hit_test(actor_t * actor, pedal_t * ped)
+{
+    if (actor->y < 1)
+        return 2;
+        
+    if (actor->y > HEIGHT - 2)
+        return 3;
+
+    if (actor->x >= ped->x && actor->x < ped->x + ped->length
+        && actor->y == ped->y) {
+        ped->actor = actor;
+        actor->pedal = ped;
+        return 1;
+    } else {
+        ped->actor = NULL;
+        return 0;
+    }
 }
 
 void __pedal_draw(pedal_t * this)
@@ -136,13 +138,22 @@ void __pedal_rise(pedal_t * this)
 {
     this->erase(this);
     this->y --;
-    if (this->y > ORG_Y) {
+    if (this->y >= 1) {
         this->draw(this);
         if (this->actor) {
             this->actor->y = this->y;
             this->actor->draw(this->actor);
+        } else {
+            this->hit_test(this);
         }
+    } else if (this->actor) {
+        this->actor->continue_life(this->actor);
     }
+}
+
+int __pedal_hit_test(pedal_t * this)
+{
+    return ___hit_test(actor, this);
 }
 
 void __actor_erase(actor_t * this)
@@ -155,40 +166,23 @@ void __actor_draw(actor_t * this)
     print_s("Y", this->x, this->y);
 }
 
-/*
- * returns: 0 no crash
- *          1 hit the pedal
- *          2 hit the boundary line
- */
-int hit_test(actor_t * actor, pedal_t * ped)
-{
-    if (actor->y > ORG_Y + HEIGHT - 1)
-        return 2;
-
-    if (actor->x >= ped->x && actor->x < ped->x + ped->length
-        && actor->y == ped->y) {
-        ped->actor = actor;
-        actor->pedal = ped;
-        return 1;
-    } else {
-        ped->actor = NULL;
-        return 0;
-    }
-}
-
-void ___determine_hit(actor_t * actor)
+int __actor_hit_test(actor_t * this)
 {
     pedal_t * cur_pd;
-    list_for_each(cur_pd, pedal_head, pedal_t, sibling)
-        if (hit_test(actor, cur_pd) == 1)
-            return;
+    int hit_code;
+    list_for_each(cur_pd, pedal_head, pedal_t, sibling) {
+        hit_code = ___hit_test(this, cur_pd);
+        if (hit_code != 0)
+            return hit_code;
+    }
     actor->pedal = NULL;
+    return 0;
 }
 
 int __actor_move_left(actor_t * this)
 {
     pedal_t * ped = this->pedal;
-    if (this->x > ORG_X + 1) {
+    if (this->x > 1) {
         if (ped) {
             if (this->x >= ped->x
                 && this->x < ped->x + ped->length) {
@@ -217,7 +211,7 @@ int __actor_move_left(actor_t * this)
 int __actor_move_right(actor_t * this)
 {
     pedal_t * ped = this->pedal;
-    if (this->x < ORG_X + WIDTH - 2) {
+    if (this->x < WIDTH - 2) {
         if (ped) {
             if (this->x >= ped->x
                 && this->x < ped->x + ped->length) {
@@ -245,7 +239,7 @@ int __actor_move_right(actor_t * this)
 int __actor_move_up(actor_t * this)
 {
     pedal_t * ped = this->pedal;
-    if (this->y > ORG_Y + 1) {
+    if (this->y > 1) {
         if (ped) {
             if (this->x >= ped->x
                 && this->x < ped->x + ped->length) {
@@ -266,20 +260,48 @@ int __actor_move_up(actor_t * this)
 
 int __actor_move_down(actor_t * this)
 {
+    int hit_code;
     pedal_t * ped = this->pedal;
 
     if (ped || this->initialized == 0)
         return -1;
 
-    if (this->y < ORG_Y + HEIGHT - 2) {
+    if (this->y <= HEIGHT - 2) {
         this->erase(this);
         this->y ++;
-        this->draw(this);
+        
+        hit_code = this->hit_test(this);
+        if (hit_code == 2 || hit_code == 3) {
+            this->continue_life(this);
+        } else {
+            this->draw(this);
+            score(0);
+        }
+    }
 
-        ___determine_hit(this);
+    return 0;
+}
 
+int __actor_continue_life(actor_t * this)
+{
+    if (this->lives > 1) {
+        if (this->pedal)
+            this->pedal->actor = NULL;
+        
+        this->pedal = list_prev_obj(pedal_tail, pedal_t, sibling);
+        if (!this->pedal)
+            this->pedal = pedal_head;
+        
+        assert(this->pedal);
+        this->x = this->pedal->x;
+        this->y = this->pedal->y;
+        this->pedal->actor = this;
+        this->lives --;
+        show_lives(this->lives - 1);
         return 0;
     }
+    
+    game_reset();
     return -1;
 }
 
@@ -298,8 +320,9 @@ void __init_pedal_pool()
     pedal_alloc_ptr->draw_slice = __pedal_draw_slice;
     pedal_alloc_ptr->reset = __pedal_reset;
     pedal_alloc_ptr->rise = __pedal_rise;
+    pedal_alloc_ptr->hit_test = __pedal_hit_test;
 
-    for (i = 1; i < PEDAL_LENGTH_MAX; i ++) {
+    for (i = 1; i < PEDAL_POOL_MAX; i ++) {
         alloc_one = malloc(sizeof(pedal_t));
         memset(alloc_one, 0, sizeof(pedal_t));
         alloc_one->erase = __pedal_erase;
@@ -308,6 +331,7 @@ void __init_pedal_pool()
         alloc_one->draw_slice = __pedal_draw_slice;
         alloc_one->reset = __pedal_reset;
         alloc_one->rise = __pedal_rise;
+        alloc_one->hit_test = __pedal_hit_test;
         list_append(alloc_one, pedal_alloc_ptr, sibling);
         pedal_alloc_ptr = alloc_one;
     }
@@ -323,6 +347,9 @@ void __init_actor()
     actor->move_right = __actor_move_right;
     actor->move_up = __actor_move_up;
     actor->move_down = __actor_move_down;
+    actor->hit_test = __actor_hit_test;
+    actor->continue_life = __actor_continue_life;
+    actor->lives = ACTOR_LIVES;
 }
 
 void __free_pedal_pool()
@@ -368,13 +395,10 @@ void pedal_rise()
 {
     pedal_t * cur;
     if (pedal_head != NULL) {
-        list_for_each(cur, pedal_head, pedal_t, sibling) {
+        list_for_each(cur, pedal_head, pedal_t, sibling)
             cur->rise(cur);
-            if (!actor->pedal)
-                hit_test(actor, cur);
-        }
 
-        if (pedal_head->y < ORG_Y + 1) {
+        if (pedal_head->y < 1) {
             cur = pedal_head;
             pedal_head = list_next_obj(pedal_head, pedal_t, sibling);
             reclaim_pedal(cur);
@@ -388,10 +412,12 @@ void pedal_appear()
     pedal_t * new_one = alloc_pedal();
     if (new_one != NULL) {
         srand(time(0));
-        pedal_len = (PEDAL_LENGTH_MAX - 3) * (rand() / (RAND_MAX + 1.0)) + 3;
-        pedal_x = (WIDTH - pedal_len - 3 ) * (rand() / (RAND_MAX + 1.0)) + 1;
-        new_one->x = pedal_x + ORG_X;
-        new_one->y = ORG_X + HEIGHT - 2;
+        pedal_len = (PEDAL_LENGTH_MAX - PEDAL_LENGTH_MIN) 
+            * (rand() / (double)RAND_MAX) + PEDAL_LENGTH_MIN;
+        pedal_x = (WIDTH - pedal_len - 3) 
+            * (rand() / (double)RAND_MAX) + 1;
+        new_one->x = pedal_x;
+        new_one->y = HEIGHT - 2;
         new_one->length = pedal_len;
 
         if (pedal_head == NULL) {
@@ -401,6 +427,7 @@ void pedal_appear()
             list_append(new_one, pedal_tail, sibling);
             pedal_tail = new_one;
         }
+        new_one->draw(new_one);
 
         if (actor->initialized == 0) {
             actor->x = new_one->x;
@@ -408,6 +435,7 @@ void pedal_appear()
             actor->pedal = new_one;
             new_one->actor = actor;
             actor->initialized = 1;
+            actor->draw(actor);
         }
     }
 }
@@ -422,42 +450,18 @@ int score(int clean)
         total_score += speed_factor + 1;
     /* show */
     sprintf(score_s, "%d", total_score);
-    print_s("                    ", ORG_Y + 6, ORG_Y + HEIGHT);
-    print_s(score_s, ORG_Y + 6, ORG_Y + HEIGHT);
-
+    print_s("                    ", 6, HEIGHT);
+    print_s(score_s, 6, HEIGHT);
     return total_score;
 }
 
-
-
-
-
-
-
-
-
-
-// int snake_hit_test()
-// {
-//     int i, j;
-//
-//     if (!snake.head || !snake.tail)
-//         return -1;
-//
-//     j = snake.head->x - ORG_X;
-//     i = snake.head->y - ORG_Y;
-//     if(stage_map[i][j] == 2)
-//         return 1;
-//
-//     struct body_slice_type *pslice = snake.head->next_slice_ptr;
-//     while(pslice) {
-//         if (snake.head->x == pslice->x && snake.head->y == pslice->y)
-//             return 1;
-//         pslice = pslice->next_slice_ptr;
-//     }
-//
-//     return 0;
-// }
+void show_lives(int lives)
+{
+    char lives_s[5];
+    sprintf(lives_s, "%d", lives);
+    print_s("  ", WIDTH - 2, HEIGHT);
+    print_s(lives_s, WIDTH - 2, HEIGHT);   
+}
 
 void update_speed_factor()
 {
@@ -466,24 +470,26 @@ void update_speed_factor()
     // speed_factor = (int)(10 * len / range);
 }
 
-
 void draw_stage()
 {
-    int i, j;
+    int i;
 
     system("clear");
     /* drawing vertical line */
-    for (i = ORG_Y + 1, j = 1; i < ORG_Y + HEIGHT - 1; ++ i, ++ j) {
-        print_s("#", ORG_X, i);
-        print_s("#", ORG_X + WIDTH - 1, i);
+    for (i = 1; i < HEIGHT - 1; ++ i) {
+        print_s("#", 0, i);
+        print_s("#", WIDTH - 1, i);
     }
     /* drawing horizontal line */
-    for (i = ORG_X, j = 0; i < ORG_X + WIDTH; ++ i, ++ j) {
-        print_s("#", i, ORG_Y);
-        print_s("#", i, ORG_Y + HEIGHT - 1);
+    for (i = 0; i < WIDTH; ++ i) {
+        print_s("#", i, 0);
+        print_s("#", i, HEIGHT - 1);
     }
     /* show score label */
-    print_s("SCORE:", ORG_X, ORG_Y + HEIGHT);
+    print_s("SCORE:", 0, HEIGHT);
+    
+    /* show lives label */
+    print_s("LIVES:", 27, HEIGHT);
 }
 
 int exec_input_cmd()
@@ -538,28 +544,16 @@ int unregister_timer()
 
 void actor_fall_trigger()
 {
-    //TODO:调速
+    static int ticks_6 = 6;
+    if (ticks_6 > speed_factor) {
+        ticks_6 --;
+        return;
+    }
+    ticks_6 = 6;
     actor->move_down(actor);
 }
 
 void pedal_rise_trigger()
-{
-    //TODO:调速
-    pedal_rise();
-}
-
-void pedal_appear_trigger()
-{
-    static int ticks_10x12 = 12;
-    if (ticks_10x12 > 0) {
-        ticks_10x12 --;
-        return;
-    }
-    ticks_10x12 = 12;
-    pedal_appear();
-}
-
-void time_forward(int signo)
 {
     static int ticks_10 = 10;
     if (ticks_10 > speed_factor) {
@@ -568,14 +562,31 @@ void time_forward(int signo)
     }
     ticks_10 = 10;
 
+    pedal_rise();
+}
+
+void pedal_appear_trigger()
+{
+    static int ticks_100 = 100;
+    if (ticks_100 > 0) {
+        ticks_100 --;
+        return;
+    }
+    ticks_100 = 100;
+    
+    pedal_appear();
+}
+
+void time_forward(int signo)
+{
     if(exec_input_cmd()) {
         game_stat = GAME_STAT_STOP;
         unregister_timer();
     }
 
-    actor_fall_trigger();
-    pedal_rise_trigger();
     pedal_appear_trigger();
+    pedal_rise_trigger();
+    actor_fall_trigger();
 }
 
 int register_timer()
@@ -606,6 +617,7 @@ void game_ready()
 {
     draw_stage();
     score(1); /* zero total_score */
+    show_lives(ACTOR_LIVES - 1); /* reset actor lives */
     game_stat = GAME_STAT_READY;
 }
 
@@ -634,7 +646,7 @@ int game_exit(int exit_code)
 {
     game_reset();
     uninitialize();
-    print_s("GAME OVER!", ORG_X, ORG_Y + HEIGHT + 1);
+    print_s("GAME OVER!", 0, HEIGHT + 1);
 
     return 0;
 }

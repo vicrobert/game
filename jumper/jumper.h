@@ -13,7 +13,7 @@
 #define __JUMPER_HD_INCL
 #include "list.h"
 
-#define WIDTH     35
+#define WIDTH     30
 #define HEIGHT    30
 #define ORG_X     1
 #define ORG_Y     1

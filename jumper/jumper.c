@@ -502,7 +502,7 @@ int score(int clean)
         total_score += speed_factor + 1;
     /* show */
     sprintf(score_s, "%d", total_score);
-    print_s("                    ", 6, HEIGHT);
+    print_s("       ", 6, HEIGHT);
     print_s(score_s, 6, HEIGHT);
     return total_score;
 }
@@ -544,7 +544,7 @@ void draw_stage()
     print_s("SCORE:", 0, HEIGHT);
     
     /* show lives label */
-    print_s("LIVES:", 27, HEIGHT);
+    print_s("LIVES:", WIDTH - 8, HEIGHT);
 }
 
 int exec_input_cmd()

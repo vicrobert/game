@@ -25,7 +25,10 @@ static int nonblock = 0;
 static short speed_factor = 0;
 int total_score = 0;
 int game_stat = 0;
-const char * ped_type_str = "_+";
+const char * pedal_skin = "_+";
+const char * actor_skin = "Y";
+const char * blood_shape = "o";
+const char * bg = " ";
 
 int reset_stdin()
 {
@@ -109,25 +112,30 @@ int ___hit_test(actor_t * actor, pedal_t * ped)
 void __pedal_draw(pedal_t * this)
 {
     int i;
-    for (i = 0; i < this->length; i ++)
-        print_c(ped_type_str[this->type], this->x + i, this->y);
+    for (i = 0; i < this->length; i ++) {
+        if (this->blood_x == this->x + i)
+            print_c(blood_shape[0], this->x + i, this->y);
+        else
+            print_c(pedal_skin[this->type], this->x + i, this->y);
+    }
+        
 }
 
 void __pedal_draw_slice(pedal_t * this, int x)
 {
-    print_c(ped_type_str[this->type], x, this->y);
+    print_c(pedal_skin[this->type], x, this->y);
 }
 
 void __pedal_erase(pedal_t * this)
 {
     int i;
     for (i = 0; i < this->length; i ++)
-        print_s(" ", this->x + i, this->y);
+        print_s(bg, this->x + i, this->y);
 }
 
 void __pedal_erase_slice(struct _pedal_t * this, int x)
 {
-    print_s(" ", x, this->y);
+    print_s(bg, x, this->y);
 }
 
 void __pedal_reset(pedal_t * pedal)
@@ -151,6 +159,11 @@ void __pedal_rise(pedal_t * this)
         if (this->actor) {
             this->actor->y = this->y;
             this->actor->draw(this->actor);
+            //feed blood
+            if (this->blood_x == this->actor->x) {
+                this->actor->feed_blood(this->actor, 1);
+                this->blood_x = 0;
+            }
         } else {
             hit_code = this->hit_test(this);
             if (hit_code == 4) {
@@ -171,12 +184,12 @@ int __pedal_hit_test(pedal_t * this)
 
 void __actor_erase(actor_t * this)
 {
-    print_s(" ", this->x, this->y);
+    print_s(bg, this->x, this->y);
 }
 
 void __actor_draw(actor_t * this)
 {
-    print_s("Y", this->x, this->y);
+    print_s(actor_skin, this->x, this->y);
 }
 
 int __actor_hit_test(actor_t * this)
@@ -202,6 +215,11 @@ int __actor_move_left(actor_t * this)
                 ped->draw_slice(ped, this->x);
             } else {
                 this->erase(this);
+            }
+            //feed blood
+            if (ped->blood_x == this->x - 1) {
+                this->feed_blood(this, 1);
+                ped->blood_x = 0;
             }
         } else {
             this->erase(this);
@@ -231,6 +249,11 @@ int __actor_move_right(actor_t * this)
                 ped->draw_slice(ped, this->x);
             } else {
                 this->erase(this);
+            }
+            //feed blood
+            if (ped->blood_x == this->x + 1) {
+                this->feed_blood(this, 1);
+                ped->blood_x = 0;
             }
         } else {
             this->erase(this);
@@ -295,6 +318,12 @@ int __actor_move_down(actor_t * this)
     return 0;
 }
 
+int __actor_feed_blood(actor_t * this, int lives)
+{
+    this->lives += lives;
+    show_lives(this->lives - 1);
+}
+
 int __actor_continue_life(actor_t * this)
 {
     if (this->lives > 1) {
@@ -305,7 +334,7 @@ int __actor_continue_life(actor_t * this)
         if (this->pedal->type != PEDAL_TYPE_NOR)
             this->pedal->type = PEDAL_TYPE_NOR;
         
-        this->x = this->pedal->x;
+        this->x = (2 * this->pedal->x + this->pedal->length) / 2;
         this->y = this->pedal->y;
         this->pedal->actor = this;
         this->lives --;
@@ -361,6 +390,7 @@ void __init_actor()
     actor->move_down = __actor_move_down;
     actor->hit_test = __actor_hit_test;
     actor->continue_life = __actor_continue_life;
+    actor->feed_blood = __actor_feed_blood;
     actor->lives = ACTOR_LIVES;
 }
 
@@ -420,7 +450,7 @@ void pedal_rise()
 
 void pedal_appear()
 {
-    int pedal_x, pedal_len;
+    int pedal_x, pedal_len, pedal_type;
     pedal_t * new_one = alloc_pedal();
     if (new_one != NULL) {
         srand(time(0));
@@ -428,11 +458,18 @@ void pedal_appear()
             * (rand() / (double)RAND_MAX) + PEDAL_LENGTH_MIN;
         pedal_x = (WIDTH - pedal_len - 3) 
             * (rand() / (double)RAND_MAX) + 1;
-        new_one->type = rand() / (double)RAND_MAX > 0.15
+        pedal_type = rand() / (double)RAND_MAX > 0.15
             ? PEDAL_TYPE_NOR : PEDAL_TYPE_TRAP;
+        if (pedal_type == PEDAL_TYPE_NOR 
+            && rand() / (double)RAND_MAX < 0.06)
+            new_one->blood_x = pedal_x + pedal_len 
+                * (rand() / (double)RAND_MAX) - 1;
+        else
+            new_one->blood_x = 0;
         new_one->x = pedal_x;
         new_one->y = HEIGHT - 2;
         new_one->length = pedal_len;
+        new_one->type = pedal_type;
 
         if (pedal_head == NULL) {
             pedal_head = new_one;
@@ -443,7 +480,7 @@ void pedal_appear()
         }
 
         if (actor->initialized == 0) {
-            actor->x = new_one->x;
+            actor->x = (2 * new_one->x + new_one->length) / 2;
             actor->y = new_one->y;
             actor->pedal = new_one;
             new_one->actor = actor;
@@ -480,13 +517,11 @@ void show_lives(int lives)
 
 void update_speed_factor()
 {
-    if (total_score > 500)
-        speed_factor = 4;
-    else if (total_score > 400)
+    if (total_score > 5000)
         speed_factor = 3;
-    else if (total_score > 300)
+    else if (total_score > 2000)
         speed_factor = 2;
-    else if (total_score > 200)
+    else if (total_score > 800)
         speed_factor = 1;
 }
 
@@ -525,7 +560,7 @@ int exec_input_cmd()
 
     if (game_stat == GAME_STAT_PAUSE)
         return 0;
-
+        
     switch(key_code) {
         case 'w':
         case 'W':
@@ -610,11 +645,11 @@ void game_tuning_trigger()
 
 void time_forward(int signo)
 {
-    if(exec_input_cmd()) {
-        game_stat = GAME_STAT_STOP;
-        unregister_timer();
-    }
-
+    exec_input_cmd();
+    
+    if (game_stat == GAME_STAT_PAUSE)
+        return;
+    
     pedal_appear_trigger();
     pedal_rise_trigger();
     actor_fall_trigger();

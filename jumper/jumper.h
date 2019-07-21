@@ -70,6 +70,7 @@ struct _pedal_t
     int x;
     int y;
     int length;
+    int blood_x;
     pedal_type_t type;
     struct _actor_t * actor;
     /* sibing list */
@@ -88,6 +89,7 @@ struct _actor_t
     void (* draw)(struct _actor_t * this);
     int (* hit_test)(struct _actor_t * this);
     int (* continue_life)(struct _actor_t * this);
+    int (* feed_blood)(struct _actor_t * this, int lives);
     /* data fields */
     int x;
     int y;

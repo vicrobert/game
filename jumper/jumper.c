@@ -95,8 +95,8 @@ int ___hit_test(actor_t * actor, pedal_t * ped)
     if (actor->y > HEIGHT - 2)
         return 3;
 
-    if (actor->x >= ped->x && actor->x < ped->x + ped->length
-        && actor->y == ped->y) {
+    if (actor->x >= ped->x && actor->y == ped->y
+        && actor->x < ped->x + ped->length) {
             ped->actor = actor;
             actor->pedal = ped;
         if (ped->type == PEDAL_TYPE_NOR)
@@ -334,7 +334,7 @@ int __actor_continue_life(actor_t * this)
         if (this->pedal->type != PEDAL_TYPE_NOR)
             this->pedal->type = PEDAL_TYPE_NOR;
         
-        this->x = (2 * this->pedal->x + this->pedal->length) / 2;
+        this->x = this->pedal->x + this->pedal->length / 2;
         this->y = this->pedal->y;
         this->pedal->actor = this;
         this->lives --;
@@ -480,7 +480,7 @@ void pedal_appear()
         }
 
         if (actor->initialized == 0) {
-            actor->x = (2 * new_one->x + new_one->length) / 2;
+            actor->x = new_one->x + new_one->length / 2;
             actor->y = new_one->y;
             actor->pedal = new_one;
             new_one->actor = actor;

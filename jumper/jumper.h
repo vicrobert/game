@@ -37,6 +37,13 @@
 /* PEDAL_LENGTH_MIN <= PEDAL_LENGTH_MAX <= WIDTH - 2 */
 #define PEDAL_LENGTH_MAX    10
 
+/* result code for hit test */
+#define HITR_NOCRASH      0
+#define HITR_PEDAL        1
+#define HITR_TOP_BOUNDARY 2
+#define HITR_BOT_BOUNDARY 3
+#define HITR_TRAP         4
+
 /* actor lives */
 #define ACTOR_LIVES 3
 

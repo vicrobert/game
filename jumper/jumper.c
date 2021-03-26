@@ -1,9 +1,11 @@
 /*
- * Snake v1.0 for Funny
+ * Jumper for Funny
  * Description: this game must be run in linux
  * Compile tools chain: gcc & gdb
  * Author: Junbo Yang
  * Date: 6/20/2016
+ *
+ * updated on 3/26/2021
  */
 #include <stdio.h>
 #include <unistd.h>
@@ -90,22 +92,22 @@ void reset_kb()
 int ___hit_test(actor_t * actor, pedal_t * ped)
 {
     if (actor->y < 1)
-        return 2;
+        return HITR_TOP_BOUNDARY;
         
     if (actor->y > HEIGHT - 2)
-        return 3;
+        return HITR_BOT_BOUNDARY;
 
     if (actor->x >= ped->x && actor->y == ped->y
         && actor->x < ped->x + ped->length) {
             ped->actor = actor;
             actor->pedal = ped;
         if (ped->type == PEDAL_TYPE_NOR)
-            return 1;
+            return HITR_PEDAL;
         else
-            return 4;
+            return HITR_TRAP;
     } else {
         ped->actor = NULL;
-        return 0;
+        return HITR_NOCRASH;
     }
 }
 
@@ -202,7 +204,7 @@ int __actor_hit_test(actor_t * this)
             return hit_code;
     }
     actor->pedal = NULL;
-    return 0;
+    return HITR_NOCRASH;
 }
 
 int __actor_move_left(actor_t * this)

@@ -1,13 +1,16 @@
 闲来无事,编个贪吃蛇玩玩
 
 ## 编译
-    $ gcc snake.c -o snake
+    $ gcc jumper.c -o jumper
 
 ## 运行
-    $ chmod +x snake
-    $ ./snake
+    $ chmod +x jumper
+    $ ./jumper
 
 ## 更新日志
+[2021-4-2]
+polish
+
 [2019-7-14]
 优化代码
 

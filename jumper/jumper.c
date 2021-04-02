@@ -168,7 +168,7 @@ void __pedal_rise(pedal_t * this)
             }
         } else {
             hit_code = this->hit_test(this);
-            if (hit_code == 4) {
+            if (hit_code == HITR_TRAP) {
                 /* if hit code equals 4, the actor had been bound */
                 assert(this->actor);
                 this->actor->continue_life(this->actor);
@@ -200,7 +200,7 @@ int __actor_hit_test(actor_t * this)
     int hit_code;
     list_for_each(cur_pd, pedal_head, pedal_t, sibling) {
         hit_code = ___hit_test(this, cur_pd);
-        if (hit_code != 0)
+        if (hit_code != HITR_NOCRASH)
             return hit_code;
     }
     actor->pedal = NULL;
@@ -309,7 +309,9 @@ int __actor_move_down(actor_t * this)
         this->y ++;
         
         hit_code = this->hit_test(this);
-        if (hit_code == 2 || hit_code == 3 || hit_code == 4) {
+        if (hit_code == HITR_TOP_BOUNDARY || 
+            hit_code == HITR_BOT_BOUNDARY || 
+            hit_code == HITR_TRAP) {
             this->continue_life(this);
         } else {
             this->draw(this);
@@ -698,6 +700,9 @@ int game_play()
     if (!register_timer())
         game_stat = GAME_STAT_PLAYING;
 
+    while(game_stat != GAME_STAT_STOP)
+        sleep(1);
+
     return 0;
 }
 
@@ -725,9 +730,6 @@ int main()
     initialize();
     game_ready();
     game_play();
-
-    while(game_stat != GAME_STAT_STOP)
-        sleep(1);
 
     return game_exit(0);
 }

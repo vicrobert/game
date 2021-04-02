@@ -84,12 +84,12 @@ int set_stdin_nonblock()
 
 int kbhit()
 {
-    char key[3];
+    char key[128] = {0};
     unsigned int nread;
     
     set_stdin_nonblock();
     
-    nread = read(STDIN_FILENO, &key, 3);
+    nread = read(STDIN_FILENO, &key, 128);
     switch(nread) {
     case 1:
         return key[0];

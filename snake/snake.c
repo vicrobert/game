@@ -224,16 +224,9 @@ int snake_hit_test()
 
     j = snake.head->x - ORG_X;
     i = snake.head->y - ORG_Y;
-    if(stage_map[i][j] == 2)
+    if(stage_map[i][j] == 2 || stage_map[i][j] == -2)
         return 1;
-    
-    struct body_slice_type *pslice = snake.head->next_slice_ptr;
-    while(pslice) {
-        if (snake.head->x == pslice->x && snake.head->y == pslice->y)
-            return 1;
-        pslice = pslice->next_slice_ptr;
-    }
-
+   
     return 0;
 }
 
@@ -359,29 +352,38 @@ int crawl()
 
     int retval;
     static int ready_to_grow = 0;
-    struct body_slice_type *pslice_tail = snake.tail;
-    struct body_slice_type *pslice = pslice_tail->prev_slice_ptr;
+    struct body_slice_type *pslice = snake.tail;
     
     /* clear tail when necessary */
-    if (!ready_to_grow)
-        clear_body_slice(pslice_tail->x, pslice_tail->y);
-
-    while(pslice) {
-        pslice_tail->x = pslice->x;
-        pslice_tail->y = pslice->y;
-        pslice_tail->direct = pslice->direct;
-        pslice_tail = pslice;
-        pslice = pslice->prev_slice_ptr;
+    if (!ready_to_grow) {
+        stage_map[pslice->y - ORG_Y][pslice->x - ORG_X] = 0;
+        clear_body_slice(pslice->x, pslice->y);
     }
 
-    if (snake.head->direct == DIRECT_UP)
-        snake.head->y = snake.head->y - 1;
-    else if (snake.head->direct == DIRECT_DOWN)
-        snake.head->y = snake.head->y + 1;
-    else if (snake.head->direct == DIRECT_RIGHT)
-        snake.head->x = snake.head->x + 1;
-    else /* DIRECT_LEFT */
-        snake.head->x = snake.head->x - 1;
+    if (snake.head->direct == DIRECT_UP) {
+        pslice->x = snake.head->x;
+        pslice->y = snake.head->y - 1;
+        pslice->direct = DIRECT_UP;
+    } else if (snake.head->direct == DIRECT_DOWN) {
+        pslice->x = snake.head->x;
+        pslice->y = snake.head->y + 1;
+        pslice->direct = DIRECT_DOWN;
+    } else if (snake.head->direct == DIRECT_RIGHT) {
+        pslice->x = snake.head->x + 1;
+        pslice->y = snake.head->y;
+        pslice->direct = DIRECT_RIGHT;
+    } else {
+        pslice->x = snake.head->x - 1;
+        pslice->y = snake.head->y;
+        pslice->direct = DIRECT_LEFT;
+    }
+
+    snake.tail = pslice->prev_slice_ptr;
+    snake.tail->next_slice_ptr = NULL;
+    snake.head->prev_slice_ptr = pslice;
+    pslice->prev_slice_ptr = NULL;
+    pslice->next_slice_ptr = snake.head;
+    snake.head = pslice;
 
     /* there is an egg */
     if (stage_map[snake.head->y - ORG_Y][snake.head->x - ORG_X] == 1) {
@@ -391,9 +393,11 @@ int crawl()
         ready_to_grow = 0;
 
     retval = snake_hit_test();
-    /* draw head */
-    if(!retval)
+    /* draw head and take up the stage*/
+    if(!retval) {
+        stage_map[snake.head->y - ORG_Y][snake.head->x - ORG_X] = -2;
         draw_body_slice(snake.head->x, snake.head->y);
+    }
 
     return retval;
 }
@@ -559,6 +563,9 @@ int game_play()
     if (!register_timer())
         game_stat = GAME_STAT_PLAYING;
 
+    while(game_stat != GAME_STAT_STOP)
+        sleep(1);
+
     return 0;
 }
 
@@ -585,9 +592,5 @@ int main()
 {
     game_ready();
     game_play();
-
-    while(game_stat != GAME_STAT_STOP)
-        sleep(1);
-    
     return game_exit(0);
 }

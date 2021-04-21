@@ -424,6 +424,7 @@ void snake_remove(int screen_clear)
     if (screen_clear) {
         while(pslice) {
             pslice_next = pslice->next_slice_ptr;
+            stage_map[pslice->y - ORG_Y][pslice->x - ORG_X] = 0;
             clear_body_slice(pslice->x, pslice->y);
             pslice = pslice_next;
         }

@@ -48,10 +48,10 @@ struct snake_type
 };
 
 #define print_s(s, x, y) \
-    printf("\033[%d;%dH%s\n", (y), ((x) << 1), (s))
+    printf("\033[%d;%dH%s\n", (y + ORG_Y), ((x + ORG_X) << 1), (s))
 
 #define print_i(i, x, y) \
-    printf("\033[%d;%dH%d\n", (y), (x), (i))
+    printf("\033[%d;%dH%d\n", (y + ORG_Y), (x + ORG_X), (i))
 
 static struct termios ori_attr, cur_attr;
 static struct body_slice_type body_slice_pool[(HEIGHT-2)*(WIDTH-2)];
@@ -125,12 +125,9 @@ void draw_egg(int x, int y)
 
 void clear_body_slice(int x, int y)
 {
-    int i = y - ORG_Y;
-    int j = x - ORG_X;
-    
-    if (stage_map[i][j] == 0)
+    if (stage_map[y][x] == 0)
         print_s(" ", x, y);
-    else if (stage_map[i][j] == 1)
+    else if (stage_map[y][x] == 1)
         print_s("O", x, y);
     /* todo: someother conditions else */
 }
@@ -140,63 +137,24 @@ void clear_egg(int x, int y)
     print_s(" ", x, y);
 }
 
-/*
- * parameter count is ignored at version 1.0
- */
 int put_egg(int count)
 {
-    int i, j, x, x2, y, y2, pos, fail = 0;
-    static int failure_times = 0;
-    struct body_slice_type *pslice;
-
-    srand(time(0));
-    pos = (HEIGHT - 2) * (WIDTH - 2) * (rand() / (RAND_MAX + 1.0));
+    int x, y, pos;
     
-    i = (pos / (WIDTH - 2)) + 1;
-    j = (pos % (WIDTH - 2)) + 1;
-    x = j + ORG_X;
-    y = i + ORG_Y;
+    srand(time(0));
+    
+    while (0 < count --) {
+        pos = (HEIGHT - 2) * (WIDTH - 2) * (rand() / (RAND_MAX + 1.0));
+        y = (pos / (WIDTH - 2)) + 1;
+        x = (pos % (WIDTH - 2)) + 1;
 
-    if (stage_map[i][j] != 0)
-        fail = 1;
-    else {
-        pslice = snake.head;
-        while (pslice) {
-            if (pslice->x == x && pslice->y == y) {
-                fail = 1;
-                break;
-            }
-            pslice = pslice->next_slice_ptr;
+        if (stage_map[y][x] == 0) {
+            stage_map[y][x] = 1;
+            eggs ++;
+            draw_egg(x, y);
         }
     }
-
-    if (fail) {
-        if ((++ failure_times) > 5) {
-            for (y2 = snake.head->y - 1, i = y2 - ORG_Y;
-                y2 <= snake.head->y + 1; ++y2, ++i)
-                for (x2 = snake.head->x - 1, j = x2 - ORG_X;
-                    x2 <= snake.head->x + 1; ++x2, ++j) {
-                    if ((y2 > ORG_Y && y2 < ORG_Y + HEIGHT - 1)
-                        && (x2 > ORG_X && x2 < ORG_X + WIDTH - 1)
-                        && (x2 != y2) && (stage_map[i][j] == 0)) {
-                        stage_map[i][j] = 1;
-                        failure_times = 0;
-                        eggs ++;
-                        /* draw egg*/
-                        draw_egg(x2, y2);
-                        return 0;
-                    }
-                }
-        }
-        return -1;
-    } else {
-        stage_map[i][j] = 1;
-        failure_times = 0;
-        eggs ++;
-        /* draw egg */
-        draw_egg(x, y);
-        return 0;
-    }
+    return eggs;
 }
 
 int score(int clean)
@@ -209,8 +167,8 @@ int score(int clean)
         total_score += snake.speed_factor + 1;
     /* show */
     sprintf(score_s, "%d", total_score);
-    print_s("                    ", ORG_Y + 6, ORG_Y + HEIGHT);
-    print_s(score_s, ORG_Y + 6, ORG_Y + HEIGHT);
+    print_s("                    ", 6, HEIGHT);
+    print_s(score_s, 6, HEIGHT);
 
     return total_score;
 }
@@ -222,8 +180,8 @@ int snake_hit_test()
     if (!snake.head || !snake.tail)
         return -1;
 
-    j = snake.head->x - ORG_X;
-    i = snake.head->y - ORG_Y;
+    j = snake.head->x;
+    i = snake.head->y;
     if(stage_map[i][j] == 2 || stage_map[i][j] == -2)
         return 1;
    
@@ -329,13 +287,10 @@ int prepares_to_grow()
 
 int eat_egg(int x, int y)
 {
-    int i = y - ORG_Y;
-    int j = x - ORG_X;
-
-    if (stage_map[i][j] != 1)
+    if (stage_map[y][x] != 1)
         return -1;
 
-    stage_map[i][j] = 0;
+    stage_map[y][x] = 0;
     eggs --;
     clear_egg(x, y);
 
@@ -356,7 +311,7 @@ int crawl()
     
     /* clear tail when necessary */
     if (!ready_to_grow) {
-        stage_map[pslice->y - ORG_Y][pslice->x - ORG_X] = 0;
+        stage_map[pslice->y][pslice->x] = 0;
         clear_body_slice(pslice->x, pslice->y);
     }
 
@@ -386,7 +341,7 @@ int crawl()
     snake.head = pslice;
 
     /* there is an egg */
-    if (stage_map[snake.head->y - ORG_Y][snake.head->x - ORG_X] == 1) {
+    if (stage_map[snake.head->y][snake.head->x] == 1) {
         eat_egg(snake.head->x, snake.head->y);
         ready_to_grow = 1;
     } else
@@ -395,7 +350,7 @@ int crawl()
     retval = snake_hit_test();
     /* draw head and take up the stage*/
     if(!retval) {
-        stage_map[snake.head->y - ORG_Y][snake.head->x - ORG_X] = -2;
+        stage_map[snake.head->y][snake.head->x] = -2;
         draw_body_slice(snake.head->x, snake.head->y);
     }
 
@@ -424,7 +379,7 @@ void snake_remove(int screen_clear)
     if (screen_clear) {
         while(pslice) {
             pslice_next = pslice->next_slice_ptr;
-            stage_map[pslice->y - ORG_Y][pslice->x - ORG_X] = 0;
+            stage_map[pslice->y][pslice->x] = 0;
             clear_body_slice(pslice->x, pslice->y);
             pslice = pslice_next;
         }
@@ -450,21 +405,21 @@ void draw_stage()
     
     clear_stage();
     /* drawing vertical line */
-    for (i = ORG_Y + 1, j = 1; i < ORG_Y + HEIGHT - 1; ++ i, ++ j) {
+    for (i = 1, j = 1; i < HEIGHT - 1; ++ i, ++ j) {
         stage_map[j][0] = 2;
         stage_map[j][WIDTH - 1] = 2;
-        print_s("#", ORG_X, i);
-        print_s("#", ORG_X + WIDTH - 1, i);
+        print_s("#", 0, i);
+        print_s("#", WIDTH - 1, i);
     }
     /* drawing horizontal line */
-    for (i = ORG_X, j = 0; i < ORG_X + WIDTH; ++ i, ++ j) {
+    for (i = 0, j = 0; i < WIDTH; ++ i, ++ j) {
         stage_map[0][j] = 2;
         stage_map[HEIGHT - 1][j] = 2;
-        print_s("#", i, ORG_Y);
-        print_s("#", i, ORG_Y + HEIGHT - 1);
+        print_s("#", i, 0);
+        print_s("#", i, HEIGHT - 1);
     }
     /* show score label */
-    print_s("SCORE:", ORG_X, ORG_Y + HEIGHT);
+    print_s("SCORE:", 0, HEIGHT);
 }
 
 int timeline_forward()
@@ -584,7 +539,7 @@ void game_reset()
 int game_exit(int exit_code)
 {
     game_reset();
-    print_s("GAME OVER!", ORG_X, ORG_Y + HEIGHT + 1);
+    print_s("GAME OVER!", 0, HEIGHT + 1);
 
     return 0;
 }

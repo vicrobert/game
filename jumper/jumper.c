@@ -300,10 +300,11 @@ int actor_feed_blood(actor_t * actor, int lives)
 int actor_continue_life(actor_t * actor)
 {
     if (actor->lives > 1) {
-		ng_tk = TICKS_0;
+        ng_tk = TICKS_0;
 
         if (actor->pedal)
             actor->pedal->actor = NULL;
+
         actor->pedal = pedal_tail;
         if (actor->pedal->type != PEDAL_TYPE_NOR)
             actor->pedal->type = PEDAL_TYPE_NOR;

@@ -508,8 +508,8 @@ int ng() {
     return ng_tk;
 }
 
-void trigger(fn_t * p, int * ticks, int reset) {
-    if (!(* ticks) --) p(), * ticks = reset;
+void trigger(fn_t * p, int * ticks, int thrhld, int reset) {
+    if (thrhld >= (* ticks) --) p(), * ticks = reset;
 }
 
 int do_direct()
@@ -575,10 +575,10 @@ void time_forward(int signo)
 {
     UNUSED(signo);
     if (!do_direct()) {
-        trigger(actor_move_down, &actor_fall_tk, TICKS_1);
-        trigger(pedal_rise, &pedal_rise_tk, TICKS_2);
-        trigger(pedal_appear, &pedal_appear_tk, TICKS_3);
-        trigger(update_speed_factor, &game_tuning_tk, TICKS_3);
+        trigger(actor_move_down, &actor_fall_tk, 0, TICKS_1);
+        trigger(pedal_rise, &pedal_rise_tk, speed_factor, TICKS_2);
+        trigger(pedal_appear, &pedal_appear_tk, 0, TICKS_3);
+        trigger(update_speed_factor, &game_tuning_tk, 0, TICKS_3);
     }
 }
 

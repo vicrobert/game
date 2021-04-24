@@ -51,7 +51,7 @@
 #define HITR_TRAP         4
 
 /* Actor lives */
-#define ACTOR_LIVES 30
+#define ACTOR_LIVES 3
 
 /* Ticks for game */
 #define TICKS_0	50

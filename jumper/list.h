@@ -19,9 +19,15 @@ struct _listhead_t {
 };
 typedef struct _listhead_t listhead_t;
 
-#define DECLARE_LISTHEAD(lh_var_name)   listhead_t lh_var_name
-#define listhead(obj_ptr, lh_var_name)  ((obj_ptr)? (&(obj_ptr)->lh_var_name): NULL)
-#define member_offset(type, member)     (unsigned long)&((type *)0)->member
+#define DECLARE_LISTHEAD(lh_var_name)   \
+    listhead_t lh_var_name
+
+#define listhead(obj_ptr, lh_var_name)  \
+    ((obj_ptr)? (&(obj_ptr)->lh_var_name): NULL)
+
+#define member_offset(type, member) \
+    (unsigned long)&((type *)0)->member
+    
 #define list_entry(type, ptr, member)   \
     ((ptr)? ((type *)(((unsigned long)(ptr)) - member_offset(type, member))): NULL)
 

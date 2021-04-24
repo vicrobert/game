@@ -27,6 +27,11 @@ static int nonblock = 0;
 static short speed_factor = 0;
 int total_score = 0;
 int game_stat = 0;
+int ng_tk = 0;
+int actor_fall_tk = TICKS_1;
+int pedal_rise_tk = TICKS_2;
+int pedal_appear_tk = TICKS_3;
+int game_tuning_tk = TICKS_3;
 const char * pedal_skin = "_+";
 const char * actor_skin = "Y";
 const char * blood_shape = "o";
@@ -63,17 +68,27 @@ int kbhit()
     case 1:
         return key[0];
     case 3:
-        if (key[2] == 'A') /* UP */
+        if (key[2] == 'A') /* Up */
             return 0xe048;
-        else if (key[2] == 'B') /* DOWN */
+        else if (key[2] == 'B') /* Down */
             return 0xe050;
-        else if (key[2] == 'C') /* RIGHT */
+        else if (key[2] == 'C') /* Right */
             return 0xe04d;
-        else if (key[2] == 'D') /* LEFT */
+        else if (key[2] == 'D') /* Left */
             return 0xe04b;
     default:
         return 0;
     }
+}
+
+static inline void actor_erase(actor_t * actor)
+{
+    print_s(bg, actor->x, actor->y);
+}
+
+static inline void actor_draw(actor_t * actor)
+{
+    print_s(actor_skin, actor->x, actor->y);
 }
 
 void reset_kb()
@@ -82,18 +97,11 @@ void reset_kb()
         nonblock = 0;
 }
 
-/*
- * returns: 0 no crash
- *          1 hit the pedal
- *          2 hit the top boundary
- *          3 hit the bottom boundary
- *          4 hit the trap
- */
 int __hit_test(actor_t * actor, pedal_t * ped)
 {
     if (actor->y < 1)
         return HITR_TOP_BOUNDARY;
-        
+
     if (actor->y > HEIGHT - 2)
         return HITR_BOT_BOUNDARY;
 
@@ -111,16 +119,6 @@ int __hit_test(actor_t * actor, pedal_t * ped)
     }
 }
 
-void actor_erase(actor_t * actor)
-{
-    print_s(bg, actor->x, actor->y);
-}
-
-void actor_draw(actor_t * actor)
-{
-    print_s(actor_skin, actor->x, actor->y);
-}
-
 void pedal_draw(pedal_t * pedal)
 {
     int i;
@@ -130,7 +128,7 @@ void pedal_draw(pedal_t * pedal)
         else
             print_c(pedal_skin[pedal->type], pedal->x + i, pedal->y);
     }
-        
+
 }
 
 void pedal_draw_slice(pedal_t * pedal, int x)
@@ -162,16 +160,16 @@ void pedal_reset(pedal_t * pedal)
 void __pedal_rise(pedal_t * pedal)
 {
     int hit_code;
-    
+
     pedal_erase(pedal);
     pedal->y --;
-    
+
     if (pedal->y >= 1) {
         pedal_draw(pedal);
         if (pedal->actor) {
             pedal->actor->y = pedal->y;
             actor_draw(pedal->actor);
-            //feed blood
+            //Feed blood
             if (pedal->blood_x == pedal->actor->x) {
                 actor_feed_blood(pedal->actor, 1);
                 pedal->blood_x = 0;
@@ -179,7 +177,7 @@ void __pedal_rise(pedal_t * pedal)
         } else {
             hit_code = pedal_hit_test(pedal);
             if (hit_code == HITR_TRAP) {
-                /* if hit code equals 4, the actor had been bound */
+                /* The actor had been bound */
                 assert(pedal->actor);
                 actor_continue_life(pedal->actor);
             }
@@ -207,7 +205,7 @@ int actor_hit_test(actor_t * actor)
     return HITR_NOCRASH;
 }
 
-int actor_move_left(actor_t * actor)
+void actor_move_left()
 {
     pedal_t * ped = actor->pedal;
     if (actor->x > 1 && actor->y > 0 && actor->y < HEIGHT - 1) {
@@ -218,7 +216,7 @@ int actor_move_left(actor_t * actor)
             } else {
                 actor_erase(actor);
             }
-            //feed blood
+            //Feed blood
             if (ped->blood_x == actor->x - 1) {
                 actor_feed_blood(actor, 1);
                 ped->blood_x = 0;
@@ -236,12 +234,10 @@ int actor_move_left(actor_t * actor)
             actor->pedal = NULL;
         }
 
-        return 0;
     }
-    return 1;
 }
 
-int actor_move_right(actor_t * actor)
+void actor_move_right()
 {
     pedal_t * ped = actor->pedal;
     if (actor->x < WIDTH - 2 && actor->y > 0 && actor->y < HEIGHT - 1) {
@@ -252,7 +248,7 @@ int actor_move_right(actor_t * actor)
             } else {
                 actor_erase(actor);
             }
-            //feed blood
+            //Feed blood
             if (ped->blood_x == actor->x + 1) {
                 actor_feed_blood(actor, 1);
                 ped->blood_x = 0;
@@ -268,27 +264,24 @@ int actor_move_right(actor_t * actor)
             ped->actor = NULL;
             actor->pedal = NULL;
         }
-
-        return 0;
     }
-    return 1;
 }
 
-int actor_move_down(actor_t * actor)
+void actor_move_down()
 {
     int hit_code;
     pedal_t * ped = actor->pedal;
 
     if (ped || actor->initialized == 0)
-        return -1;
+        return;
 
     if (actor->y <= HEIGHT - 2) {
         actor_erase(actor);
         actor->y ++;
-        
+
         hit_code = actor_hit_test(actor);
-        if (hit_code == HITR_TOP_BOUNDARY || 
-            hit_code == HITR_BOT_BOUNDARY || 
+        if (hit_code == HITR_TOP_BOUNDARY ||
+            hit_code == HITR_BOT_BOUNDARY ||
             hit_code == HITR_TRAP) {
             actor_continue_life(actor);
         } else {
@@ -296,8 +289,6 @@ int actor_move_down(actor_t * actor)
             score(0);
         }
     }
-
-    return 0;
 }
 
 int actor_feed_blood(actor_t * actor, int lives)
@@ -309,13 +300,14 @@ int actor_feed_blood(actor_t * actor, int lives)
 int actor_continue_life(actor_t * actor)
 {
     if (actor->lives > 1) {
+		ng_tk = TICKS_0;
+
         if (actor->pedal)
             actor->pedal->actor = NULL;
-        
-        actor->pedal = pedal_tail;           
+        actor->pedal = pedal_tail;
         if (actor->pedal->type != PEDAL_TYPE_NOR)
             actor->pedal->type = PEDAL_TYPE_NOR;
-        
+
         actor->x = actor->pedal->x + actor->pedal->length / 2;
         actor->y = actor->pedal->y;
         actor->pedal->actor = actor;
@@ -323,7 +315,7 @@ int actor_continue_life(actor_t * actor)
         show_lives(actor->lives - 1);
         return 0;
     }
-    
+
     game_reset();
     return -1;
 }
@@ -413,15 +405,15 @@ void pedal_appear()
     pedal_t * new_one = alloc_pedal();
     if (new_one != NULL) {
         srand(time(0));
-        pedal_len = (PEDAL_LENGTH_MAX - PEDAL_LENGTH_MIN) 
+        pedal_len = (PEDAL_LENGTH_MAX - PEDAL_LENGTH_MIN)
             * (rand() / (double)RAND_MAX) + PEDAL_LENGTH_MIN;
-        pedal_x = (WIDTH - pedal_len - 3) 
+        pedal_x = (WIDTH - pedal_len - 3)
             * (rand() / (double)RAND_MAX) + 1;
         pedal_type = rand() / (double)RAND_MAX > 0.15
             ? PEDAL_TYPE_NOR : PEDAL_TYPE_TRAP;
-        if (pedal_type == PEDAL_TYPE_NOR 
+        if (pedal_type == PEDAL_TYPE_NOR
             && rand() / (double)RAND_MAX < 0.06)
-            new_one->blood_x = pedal_x + pedal_len 
+            new_one->blood_x = pedal_x + pedal_len
                 * (rand() / (double)RAND_MAX) - 1;
         else
             new_one->blood_x = 0;
@@ -454,12 +446,12 @@ void pedal_appear()
 int score(int clean)
 {
     char score_s[20];
-    /* calculate */
-    if (clean)
-        total_score = 0;
-    else
-        total_score += speed_factor + 1;
-    /* show */
+
+    /* Calculate score */
+    if (clean) total_score = 0;
+    else total_score += speed_factor + 1;
+
+    /* Show */
     sprintf(score_s, "%d", total_score);
     print_s("       ", 6, HEIGHT);
     print_s(score_s, 6, HEIGHT);
@@ -471,7 +463,7 @@ void show_lives(int lives)
     char lives_s[5];
     sprintf(lives_s, "%d", lives);
     print_s("  ", WIDTH - 2, HEIGHT);
-    print_s(lives_s, WIDTH - 2, HEIGHT);   
+    print_s(lives_s, WIDTH - 2, HEIGHT);
 }
 
 void update_speed_factor()
@@ -488,61 +480,84 @@ void draw_stage()
 {
     int i;
 
+    /* Clean the stage */
     system("clear");
-    /* drawing vertical line */
+
+    /* Drawing vertical line */
     for (i = 1; i < HEIGHT - 1; ++ i) {
         print_s("#", 0, i);
         print_s("#", WIDTH - 1, i);
     }
-    /* drawing horizontal line */
+
+    /* Drawing horizontal line */
     for (i = 0; i < WIDTH; ++ i) {
         print_s("#", i, 0);
         print_s("#", i, HEIGHT - 1);
     }
-    /* show score label */
+
+    /* Show score label */
     print_s("SCORE:", 0, HEIGHT);
-    
-    /* show lives label */
+
+    /* Show lives label */
     print_s("LIVES:", WIDTH - 8, HEIGHT);
 }
 
-int exec_input_cmd()
+int ng() {
+    if (ng_tk) ng_tk --;
+    return ng_tk;
+}
+
+void trigger(fn_t * p, int * ticks, int reset) {
+    if (!(* ticks) --) p(), * ticks = reset;
+}
+
+int do_direct()
 {
     int key_code;
 
-    key_code = kbhit();
-    /* deal game pause */
-    if (key_code == ' ' && game_stat == GAME_STAT_PLAYING)
-        game_stat = GAME_STAT_PAUSE;
-    else if (key_code == ' ' && game_stat == GAME_STAT_PAUSE)
-        game_stat = GAME_STAT_PLAYING;
+    /* Do nothing if ng */
+    if (ng()) return 1;
 
-    if (game_stat == GAME_STAT_PAUSE)
-        return 0;
-        
-    switch(key_code) {
+    /* Aquire key code */
+    key_code = kbhit();
+
+    /* Deal pause state */
+    if (key_code == ' ') {
+        if (game_stat & GAME_STAT_PLAYING) {
+            game_stat &= (~ GAME_STAT_PLAYING);
+            game_stat |= GAME_STAT_PAUSE;
+            return 1;
+        } else if (game_stat & GAME_STAT_PAUSE) {
+            game_stat &= (~ GAME_STAT_PAUSE);
+            game_stat |= GAME_STAT_PLAYING;
+            return 0;
+        }
+    }
+
+    if (game_stat & GAME_STAT_PAUSE) return 1;
+
+    switch (key_code) {
         case 'w':
         case 'W':
         case 0xe048:
-            //TODO: UP
+            //TODO: Up
             break;
         case 's':
         case 'S':
         case 0xe050:
-            //TODO: DOWN
+            //TODO: Down
             break;
         case 'a':
         case 'A':
         case 0xe04b:
-            actor_move_left(actor);
+            actor_move_left();
             break;
         case 'd':
         case 'D':
         case 0xe04d:
-            actor_move_right(actor);
+            actor_move_right();
             break;
     }
-
     return 0;
 }
 
@@ -552,67 +567,18 @@ int unregister_timer()
     itv.it_interval.tv_sec = 0;
     itv.it_interval.tv_usec = 0;
     itv.it_value = itv.it_interval;
-
     return setitimer(ITIMER_REAL, &itv, NULL);
-}
-
-void actor_fall_trigger()
-{
-    static int ticks_6 = 6;
-    if (ticks_6 > speed_factor) {
-        ticks_6 --;
-        return;
-    }
-    ticks_6 = 6;
-    actor_move_down(actor);
-}
-
-void pedal_rise_trigger()
-{
-    static int ticks_10 = 10;
-    if (ticks_10 > speed_factor) {
-        ticks_10 --;
-        return;
-    }
-    ticks_10 = 10;
-
-    pedal_rise();
-}
-
-void pedal_appear_trigger()
-{
-    static int ticks_100 = 100;
-    if (ticks_100 > 0) {
-        ticks_100 --;
-        return;
-    }
-    ticks_100 = 100;
-    
-    pedal_appear();
-}
-
-void game_tuning_trigger()
-{
-    static int ticks_100 = 100;
-    if (ticks_100 > 0) {
-        ticks_100 --;
-        return;
-    }
-    ticks_100 = 100;
-    update_speed_factor();
 }
 
 void time_forward(int signo)
 {
-    exec_input_cmd();
-    
-    if (game_stat == GAME_STAT_PAUSE)
-        return;
-    
-    pedal_appear_trigger();
-    pedal_rise_trigger();
-    actor_fall_trigger();
-    game_tuning_trigger();
+    UNUSED(signo);
+    if (!do_direct()) {
+        trigger(actor_move_down, &actor_fall_tk, TICKS_1);
+        trigger(pedal_rise, &pedal_rise_tk, TICKS_2);
+        trigger(pedal_appear, &pedal_appear_tk, TICKS_3);
+        trigger(update_speed_factor, &game_tuning_tk, TICKS_3);
+    }
 }
 
 int register_timer()
@@ -621,19 +587,17 @@ int register_timer()
     itv.it_interval.tv_sec = 0;
     itv.it_interval.tv_usec = 10000;
     itv.it_value = itv.it_interval;
-
     signal(SIGALRM, time_forward);
-
     return setitimer(ITIMER_REAL, &itv, NULL);
 }
 
-void initialize()
+void game_init()
 {
     __init_pedal_pool();
     __init_actor();
 }
 
-void uninitialize()
+void game_uninit()
 {
     __free_pedal_pool();
     __free_actor();
@@ -641,21 +605,32 @@ void uninitialize()
 
 void game_ready()
 {
+    /* Draw Stage */
     draw_stage();
-    score(1); /* zero total_score */
-    show_lives(ACTOR_LIVES - 1); /* reset actor lives */
+
+    /* Zero total_score */
+    score(1);
+
+    /* Reset actor lives */
+    show_lives(ACTOR_LIVES - 1);
+
+    /* Setting game state */
     game_stat = GAME_STAT_READY;
 }
 
 int game_play()
 {
-    if (game_stat != GAME_STAT_READY)
+    int looping = GAME_STAT_PLAYING | GAME_STAT_PAUSE;
+
+    if (game_stat & looping)
         return -1;
 
-    if (!register_timer())
-        game_stat = GAME_STAT_PLAYING;
+    if (!register_timer()) {
+        game_stat &= (~ GAME_STAT_PAUSE);
+        game_stat |= GAME_STAT_PLAYING;
+    }
 
-    while(game_stat != GAME_STAT_STOP)
+    while(game_stat & looping)
         sleep(1);
 
     return 0;
@@ -663,7 +638,8 @@ int game_play()
 
 void game_reset()
 {
-    if (game_stat == GAME_STAT_PLAYING)
+    if (game_stat &
+        (GAME_STAT_PLAYING | GAME_STAT_PAUSE))
         unregister_timer();
 
     reset_kb();
@@ -674,7 +650,7 @@ void game_reset()
 int game_exit(int exit_code)
 {
     game_reset();
-    uninitialize();
+    game_uninit();
     print_s("GAME OVER!", 0, HEIGHT + 1);
 
     return 0;
@@ -682,9 +658,8 @@ int game_exit(int exit_code)
 
 int main()
 {
-    initialize();
+    game_init();
     game_ready();
     game_play();
-
     return game_exit(0);
 }

@@ -525,11 +525,11 @@ int do_direct()
     /* Deal pause state */
     if (key_code == ' ') {
         if (game_stat & GAME_STAT_PLAYING) {
-            game_stat &= (~ GAME_STAT_PLAYING);
+            game_stat &= ~ GAME_STAT_PLAYING;
             game_stat |= GAME_STAT_PAUSE;
             return 1;
         } else if (game_stat & GAME_STAT_PAUSE) {
-            game_stat &= (~ GAME_STAT_PAUSE);
+            game_stat &= ~ GAME_STAT_PAUSE;
             game_stat |= GAME_STAT_PLAYING;
             return 0;
         }
@@ -627,7 +627,7 @@ int game_play()
         return -1;
 
     if (!register_timer()) {
-        game_stat &= (~ GAME_STAT_PAUSE);
+        game_stat &= ~ GAME_STAT_PAUSE;
         game_stat |= GAME_STAT_PLAYING;
     }
 

@@ -37,12 +37,13 @@ const char * actor_skin = "Y";
 const char * blood_shape = "o";
 const char * bg = " ";
 
-int reset_stdin()
+int __reset_stdin()
 {
+    nonblock = 0;
     return tcsetattr(STDIN_FILENO, TCSANOW, &ori_attr);
 }
 
-int set_stdin_nonblock()
+int __set_stdin_nonblock()
 {
     if(nonblock || tcgetattr(STDIN_FILENO, &ori_attr))
         return -1;
@@ -60,9 +61,7 @@ int kbhit()
 {
     unsigned int nread;
     char key[128] = {0};
-
-    set_stdin_nonblock();
-
+    
     nread = read(STDIN_FILENO, key, 128);
     switch(nread) {
     case 1:
@@ -89,12 +88,6 @@ static inline void actor_erase(actor_t * actor)
 static inline void actor_draw(actor_t * actor)
 {
     print_s(actor_skin, actor->x, actor->y);
-}
-
-void reset_kb()
-{
-    if (!reset_stdin())
-        nonblock = 0;
 }
 
 int __hit_test(actor_t * actor, pedal_t * ped)
@@ -596,12 +589,14 @@ void game_init()
 {
     __init_pedal_pool();
     __init_actor();
+    __set_stdin_nonblock();
 }
 
 void game_uninit()
 {
     __free_pedal_pool();
     __free_actor();
+    __reset_stdin();
 }
 
 void game_ready()
@@ -642,8 +637,6 @@ void game_reset()
     if (game_stat &
         (GAME_STAT_PLAYING | GAME_STAT_PAUSE))
         unregister_timer();
-
-    reset_kb();
 
     game_stat = GAME_STAT_STOP;
 }

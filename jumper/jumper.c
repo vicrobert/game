@@ -647,7 +647,7 @@ int game_exit(int exit_code)
     game_uninit();
     print_s("GAME OVER!", 0, HEIGHT + 1);
 
-    return 0;
+    return exit_code;
 }
 
 int main()

@@ -608,7 +608,7 @@ void game_ready()
     score(1);
 
     /* Reset actor lives */
-    show_lives(ACTOR_LIVES - 1);
+    show_lives(actor->lives - 1);
 
     /* Setting game state */
     game_stat = GAME_STAT_READY;

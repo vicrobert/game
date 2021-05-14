@@ -19,11 +19,11 @@ struct _listhead_t {
 };
 typedef struct _listhead_t listhead_t;
 
-#define DECLARE_LISTHEAD(lh_var_name)   \
-    listhead_t lh_var_name
+#define DECLARE_LISTHEAD(lh_var)   \
+    listhead_t lh_var
 
-#define listhead(obj_ptr, lh_var_name)  \
-    ((obj_ptr)? (&(obj_ptr)->lh_var_name): NULL)
+#define listhead(obj_ptr, lh_var)  \
+    ((obj_ptr)? (&(obj_ptr)->lh_var): NULL)
 
 #define member_offset(type, member) \
     (unsigned long)&((type *)0)->member
@@ -61,37 +61,48 @@ typedef struct _listhead_t listhead_t;
         (ptr)->prev = (ptr)->next = NULL; \
     } while (0)
 
-#define list_init_listhead(obj_ptr, lh_var_name) \
-    listhead(obj_ptr, lh_var_name)->prev = NULL, listhead(obj_ptr, lh_var_name)->next = NULL;
+#define list_init_listhead(obj_ptr, lh_var) \
+    listhead(obj_ptr, lh_var)->prev = NULL, listhead(obj_ptr, lh_var)->next = NULL;
 
-#define list_insert_before(obj_ptr, to_ptr, lh_var_name) \
-    _list_insert_(listhead(to_ptr, lh_var_name), listhead(obj_ptr, lh_var_name))
+#define list_insert_before(obj_ptr, to_ptr, lh_var) \
+    _list_insert_(listhead(to_ptr, lh_var), listhead(obj_ptr, lh_var))
 
-#define list_append(obj_ptr, to_ptr, lh_var_name) \
-    _list_append_(listhead(to_ptr, lh_var_name), listhead(obj_ptr, lh_var_name))
+#define list_append(obj_ptr, to_ptr, lh_var) \
+    _list_append_(listhead(to_ptr, lh_var), listhead(obj_ptr, lh_var))
 
-#define list_remove(obj_ptr, lh_var_name) \
-    _list_remove_(listhead(obj_ptr, lh_var_name))
+#define list_remove(obj_ptr, lh_var) \
+    _list_remove_(listhead(obj_ptr, lh_var))
 
-#define list_prev_obj(obj_ptr, obj_type, lh_var_name) \
-    list_entry(obj_type, listhead(obj_ptr, lh_var_name)->prev, lh_var_name)
+#define list_prev_obj(obj_ptr, obj_type, lh_var) \
+    list_entry(obj_type, listhead(obj_ptr, lh_var)->prev, lh_var)
 
-#define list_next_obj(obj_ptr, obj_type, lh_var_name) \
-    list_entry(obj_type, listhead(obj_ptr, lh_var_name)->next, lh_var_name)
+#define list_next_obj(obj_ptr, obj_type, lh_var) \
+    list_entry(obj_type, listhead(obj_ptr, lh_var)->next, lh_var)
 
-#define list_tail_obj(head_obj_ptr, obj_type, lh_var_name, tail_obj_ptr)    \
+#define list_tail_obj(head_obj_ptr, obj_type, lh_var, tail_obj_ptr)    \
     do { \
         obj_type *obj_ptr; \
         for (obj_ptr = head_obj_ptr; obj_ptr != NULL; \
-            tail_obj_ptr = obj_ptr, obj_ptr = list_next_obj(obj_ptr, obj_type, lh_var_name)); \
+            tail_obj_ptr = obj_ptr, obj_ptr = list_next_obj(obj_ptr, obj_type, lh_var)); \
     } while (0)
 
-#define list_for_each(obj_ptr, head_obj_ptr, obj_type, lh_var_name) \
+#define list_for_each(obj_ptr, head_obj_ptr, obj_type, lh_var) \
     for (obj_ptr = head_obj_ptr; obj_ptr != NULL; \
-        obj_ptr = list_next_obj(obj_ptr, obj_type, lh_var_name))
+        obj_ptr = list_next_obj(obj_ptr, obj_type, lh_var))
 
-#define list_for_each_reverse(obj_ptr, tail_obj_ptr, obj_type, lh_var_name) \
+#define list_for_each_reverse(obj_ptr, tail_obj_ptr, obj_type, lh_var) \
     for (obj_ptr = tail_obj_ptr; obj_ptr != NULL; \
-        obj_ptr = list_prev_obj(obj_ptr, obj_type, lh_var_name))
+        obj_ptr = list_prev_obj(obj_ptr, obj_type, lh_var))
+
+#define list_free(head_obj_ptr, obj_type, lh_var) \
+{\
+    obj_type *cur, *prev, *next;\
+    list_for_each(cur, head_obj_ptr, obj_type, lh_var) {\
+        prev = list_prev_obj(cur, obj_type, lh_var);\
+        if (prev) free(prev);\
+	next = list_next_obj(cur, obj_type, lh_var);\
+	if (!next) {free(cur);break;}\
+    }\
+}
 
 #endif

@@ -341,13 +341,8 @@ void __init_actor()
 
 void __free_pedal_pool()
 {
-    pedal_t * cur, * to_free;
-    list_for_each(cur, pedal_pool, pedal_t, sibling) {
-        to_free = list_prev_obj(cur, pedal_t, sibling);
-        if (to_free)
-            free(to_free);
-    }
-    free(pedal_alloc_ptr);
+    list_free(pedal_pool, pedal_t, sibling);
+    //free(pedal_alloc_ptr);
     pedal_head = pedal_alloc_ptr = NULL;
 }
 

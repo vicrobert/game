@@ -96,12 +96,11 @@ typedef struct _listhead_t listhead_t;
 
 #define list_free(head_obj_ptr, obj_type, lh_var) \
 {\
-    obj_type *cur, *prev, *next;\
-    list_for_each(cur, head_obj_ptr, obj_type, lh_var) {\
-        prev = list_prev_obj(cur, obj_type, lh_var);\
-        if (prev) free(prev);\
-	next = list_next_obj(cur, obj_type, lh_var);\
-	if (!next) {free(cur);break;}\
+    obj_type *cur, *next;\
+    cur = head_obj_ptr;\
+    while (cur) {\
+        next = list_entry(obj_type, cur->lh_var.next, lh_var);\
+        free(cur);cur = next;\
     }\
 }
 

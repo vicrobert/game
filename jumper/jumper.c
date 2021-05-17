@@ -342,7 +342,6 @@ void __init_actor()
 void __free_pedal_pool()
 {
     list_free(pedal_pool, pedal_t, sibling);
-    //free(pedal_alloc_ptr);
     pedal_head = pedal_alloc_ptr = NULL;
 }
 

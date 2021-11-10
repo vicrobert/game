@@ -90,28 +90,6 @@ static inline void actor_draw(actor_t * actor)
     print_s(actor_skin, actor->x, actor->y);
 }
 
-int __hit_test(actor_t * actor, pedal_t * ped)
-{
-    if (actor->y < 1)
-        return HITR_TOP_BOUNDARY;
-
-    if (actor->y > HEIGHT - 2)
-        return HITR_BOT_BOUNDARY;
-
-    if (actor->x >= ped->x && actor->y == ped->y
-        && actor->x < ped->x + ped->length) {
-            ped->actor = actor;
-            actor->pedal = ped;
-        if (ped->type == PEDAL_TYPE_NOR)
-            return HITR_PEDAL;
-        else
-            return HITR_TRAP;
-    } else {
-        ped->actor = NULL;
-        return HITR_NOCRASH;
-    }
-}
-
 void pedal_draw(pedal_t * pedal)
 {
     int i;
@@ -150,6 +128,71 @@ void pedal_reset(pedal_t * pedal)
     }
 }
 
+void show_lives(int lives)
+{   
+    char lives_s[5]; 
+    sprintf(lives_s, "%d", lives);
+    print_s("  ", WIDTH - 2, HEIGHT);
+    print_s(lives_s, WIDTH - 2, HEIGHT);
+}
+
+int actor_continue_life(actor_t * actor)
+{
+    if (actor->lives > 1) {
+        ng_tk = TICKS_0;
+
+        if (actor->pedal)
+            actor->pedal->actor = NULL;
+
+        actor->pedal = pedal_tail;
+        if (actor->pedal->type != PEDAL_TYPE_NOR)
+            actor->pedal->type = PEDAL_TYPE_NOR;
+
+        actor->x = actor->pedal->x + actor->pedal->length / 2;
+        actor->y = actor->pedal->y;
+        actor->pedal->actor = actor;
+        actor->lives --;
+        show_lives(actor->lives - 1);
+        return 0;
+    }
+
+    game_reset();
+    return -1;
+}
+
+void actor_feed_blood(actor_t * actor, int lives)
+{
+    actor->lives += lives;
+    show_lives(actor->lives - 1);
+}
+
+int __hit_test(actor_t * actor, pedal_t * ped)
+{
+    if (actor->y < 1)
+        return HITR_TOP_BOUNDARY;
+
+    if (actor->y > HEIGHT - 2)
+        return HITR_BOT_BOUNDARY;
+
+    if (actor->x >= ped->x && actor->y == ped->y
+        && actor->x < ped->x + ped->length) {
+            ped->actor = actor;
+            actor->pedal = ped;
+        if (ped->type == PEDAL_TYPE_NOR)
+            return HITR_PEDAL;
+        else
+            return HITR_TRAP;
+    } else {
+        ped->actor = NULL;
+        return HITR_NOCRASH;
+    }
+}
+
+int pedal_hit_test(pedal_t * pedal)
+{
+    return __hit_test(actor, pedal);
+}
+
 void __pedal_rise(pedal_t * pedal)
 {
     int hit_code;
@@ -178,11 +221,6 @@ void __pedal_rise(pedal_t * pedal)
     } else if (pedal->actor) {
         actor_continue_life(pedal->actor);
     }
-}
-
-int pedal_hit_test(pedal_t * pedal)
-{
-    return __hit_test(actor, pedal);
 }
 
 int actor_hit_test(actor_t * actor)
@@ -284,36 +322,6 @@ void actor_move_down()
     }
 }
 
-int actor_feed_blood(actor_t * actor, int lives)
-{
-    actor->lives += lives;
-    show_lives(actor->lives - 1);
-}
-
-int actor_continue_life(actor_t * actor)
-{
-    if (actor->lives > 1) {
-        ng_tk = TICKS_0;
-
-        if (actor->pedal)
-            actor->pedal->actor = NULL;
-
-        actor->pedal = pedal_tail;
-        if (actor->pedal->type != PEDAL_TYPE_NOR)
-            actor->pedal->type = PEDAL_TYPE_NOR;
-
-        actor->x = actor->pedal->x + actor->pedal->length / 2;
-        actor->y = actor->pedal->y;
-        actor->pedal->actor = actor;
-        actor->lives --;
-        show_lives(actor->lives - 1);
-        return 0;
-    }
-
-    game_reset();
-    return -1;
-}
-
 void __init_pedal_pool()
 {
     int i;
@@ -363,7 +371,7 @@ pedal_t * alloc_pedal()
     return pick;
 }
 
-int reclaim_pedal(pedal_t * pedal)
+void reclaim_pedal(pedal_t * pedal)
 {
     if (pedal) {
         pedal_reset(pedal);
@@ -444,14 +452,6 @@ int score(int clean)
     print_s("       ", 6, HEIGHT);
     print_s(score_s, 6, HEIGHT);
     return total_score;
-}
-
-void show_lives(int lives)
-{
-    char lives_s[5];
-    sprintf(lives_s, "%d", lives);
-    print_s("  ", WIDTH - 2, HEIGHT);
-    print_s(lives_s, WIDTH - 2, HEIGHT);
 }
 
 void update_speed_factor()
